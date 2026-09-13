@@ -28,3 +28,6 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Add shared response-shape guidance
 - Archive response-shape task
 - Initialize Inventor Scripts workspace
+
+### Fixed
+- Make changelog generation clone-independent
