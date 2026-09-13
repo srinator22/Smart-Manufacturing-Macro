@@ -125,8 +125,8 @@ fi
 [[ -f CHANGELOG.md ]] || fail "CHANGELOG.md is missing; regenerate it with git-cliff"
 changelog_tmp="$(mktemp)"
 trap 'rm -f "$changelog_tmp"' EXIT
-git-cliff --config cliff.toml --output "$changelog_tmp"
+bash ./scripts/update-changelog.sh "$changelog_tmp"
 diff -u CHANGELOG.md "$changelog_tmp" \
-  || fail "CHANGELOG.md is stale; regenerate it with git-cliff"
+  || fail "CHANGELOG.md is stale; regenerate it with ./scripts/update-changelog.sh"
 
 echo "check: OK"

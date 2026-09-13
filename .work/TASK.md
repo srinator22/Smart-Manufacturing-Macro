@@ -44,10 +44,13 @@ Convert the agentic template into a production-oriented Inventor 2027 monorepo f
 - 2026-09-13: Reframed the root as Inventor Scripts, moved Smart Manufacturing Exporter into its own `projects/` boundary, and registered it in `InventorScripts.sln`.
 - 2026-09-13: Initial independent Sol review attempt was blocked by workspace credits; a retry became available after the workspace pivot.
 - 2026-09-13: Sol review failed mutation ownership, empty mutation scoring, and cross-project boundary enforcement; added project-owned mutation gates, mutable compatibility behavior, and a global reference-boundary test.
+- 2026-09-13: GitHub CI reached all checks but found clone-dependent changelog output because local-only template tags matched an unanchored release-tag pattern; anchored SemVer tags and made generation use the declared workspace version.
 
 ## Review verdict
 
 PASS - The staged monorepo setup satisfies the review gate. The canonical check completed with locked restore, zero-warning Debug and Release builds, 4 unit tests, 2 architecture tests, history and working-tree secret scans, changelog freshness, and a scored mutation run of 1 killed mutant out of 1 for 100.00%. Project-owned mutation routing and repository-wide cross-project reference enforcement address the prior findings. No blocking correctness, security, path, dependency, architecture, or documentation issues remain in the staged diff.
+
+PASS - Follow-up review confirmed the clone-independent changelog repair. An isolated clone simulation produced byte-identical output with local template tags, without those tags as on GitHub, and after adding the annotated `v0.1.0` tag. The exact SemVer pattern excludes `template-v*`, and the generator consistently derives the release tag from `Directory.Build.props`.
 
 ## Retro
 <!-- filled by docs/procedures/retro.md -->

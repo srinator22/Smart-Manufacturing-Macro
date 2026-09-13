@@ -1,7 +1,7 @@
 # git-cliff configuration: Conventional Commits -> CHANGELOG.md.
 # CHANGELOG.md is a generated artifact and is never hand-edited (kernel
 # rule 18); the detail lives in commit bodies. Regenerate with:
-#   git cliff -o CHANGELOG.md
+#   ./scripts/update-changelog.sh
 
 [changelog]
 header = """
@@ -30,7 +30,7 @@ trim = true
 conventional_commits = true
 filter_unconventional = false
 protect_breaking_commits = true
-tag_pattern = "v[0-9].*"
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 sort_commits = "oldest"
 commit_parsers = [
   { message = "^chore\\(release\\)", skip = true },
