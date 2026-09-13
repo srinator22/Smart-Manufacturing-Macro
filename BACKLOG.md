@@ -15,3 +15,4 @@ Remaining work only. Priorities P0-P3 follow `docs/procedures/audit.md`.
 | Phase 5 deterministic rule engine, priority, and selection reasons | P1 | Makes automatic decisions predictable and explainable | open |
 | Phase 6 naming, existing-file status, collision handling, progress, cancellation, and logs | P1 | Completes professional STEP export behavior | open |
 | Phases 7-10 manufacturing formats, professional UI, quick export, context menu, and hardening | P2 | Later capability waves after the foundation is verified | open |
+| Update `actions/checkout` after verifying a Node.js 24-native release | P2 | GitHub CI currently succeeds but warns that checkout v4 targets deprecated Node.js 20 | open |
