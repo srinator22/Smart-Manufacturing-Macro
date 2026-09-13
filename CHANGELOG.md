@@ -10,6 +10,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Refine reviewer gate, permissions seeding, and worktree isolation
 - Add shared response-shape guidance
 - Archive response-shape task
+- Initialize Inventor Scripts workspace
 ## [template-v0.2.1] - 2026-08-01
 
 ### Added
