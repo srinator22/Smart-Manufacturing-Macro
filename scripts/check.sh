@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# check.sh - the single gauntlet. CI runs this exact script, so local and CI
-# cannot diverge. Usage: ./scripts/check.sh [--full-mutation]
+# check.sh - canonical local and CI verification for the Inventor Scripts workspace.
+# Usage: ./scripts/check.sh [--full-mutation]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,152 +15,118 @@ for arg in "$@"; do
 done
 
 fail() { echo "CHECK FAILED: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || fail "$1 is required but was not found on PATH"; }
 
-# Step 1 (always): kernel integrity.
+# Step 1: kernel integrity.
 ./scripts/kernel-hash.sh --verify
 
-# Step 2 (always): AGENTS.md hard line budget.
+# Step 2: AGENTS.md line budget.
 lines="$(wc -l < AGENTS.md)"
 if (( lines > 180 )); then
-  fail "AGENTS.md is $lines lines; the hard budget is 180. Move detail to docs/rules/ or archive lessons."
+  fail "AGENTS.md is $lines lines; the hard budget is 180"
 fi
 echo "line-budget: OK (AGENTS.md = $lines/180)"
 
-# Step 3 (always, non-fatal): untracked-files report. New modules that pass
-# locally while never being staged are a known CI-breaker.
+# Step 3: untracked-files report.
 untracked="$(git status --porcelain | grep '^??' || true)"
 if [[ -n "$untracked" ]]; then
-  echo "------------------------------------------------------------------"
-  echo "WARNING: untracked files exist. Resolve each one deliberately:"
-  echo "stage it or ignore it, never leave it ambiguous."
+  echo "WARNING: untracked files exist; stage or ignore each one deliberately:"
   echo "$untracked" | sed 's/^?? /  /'
-  echo "------------------------------------------------------------------"
 fi
 
-# Step 4: template-mode gate. Before start runs there is no stack to
-# check, so the gauntlet checks the template itself: a green badge means
-# the template is intact, not merely that nothing executed.
-if [[ ! -f .start-done ]]; then
-  echo "TEMPLATE MODE - start has not run; running the template self-test."
-  tfail=0
-  terr() { echo "TEMPLATE SELF-TEST FAILED: $*" >&2; tfail=1; }
+[[ -f .start-done ]] || fail ".start-done is missing; initialization is incomplete"
+need dotnet
+need gitleaks
+need git-cliff
 
-  # 4a. Shell syntax of every script.
-  for s in scripts/*.sh; do
-    bash -n "$s" || terr "bash -n: $s"
-  done
+# Step 4: workspace registration and project contracts.
+while IFS= read -r project_dir; do
+  [[ -f "$project_dir/README.md" ]] \
+    || fail "$project_dir is missing its project README"
+done < <(find projects -mindepth 1 -maxdepth 1 -type d -print | sort)
 
-  # 4b. Every shipped template file exists (the blueprint tree, mechanized).
-  required=(
-    AGENTS.md CLAUDE.md README.md BACKLOG.md BUILD_NOTES.md CONTRIBUTING.md
-    SECURITY.md LICENSE manifest.md cliff.toml .kernel.hash .gitignore
-    .editorconfig .gitattributes
-    .github/workflows/ci.yml
-    .github/pull_request_template.md
-    .github/ISSUE_TEMPLATE/bug_report.yml
-    docs/BLUEPRINT.md docs/ARCHITECTURE.md docs/operations.md
-    docs/decisions/0001-template-architecture.md
-    docs/decisions/0002-complexity-budgets-and-workflow-delegation.md
-    docs/procedures/start.md docs/procedures/ship.md docs/procedures/retro.md
-    docs/procedures/maintain.md docs/procedures/bugfix.md
-    docs/procedures/audit.md docs/procedures/longjob.md
-    docs/rules/architecture.md docs/rules/security.md
-    docs/rules/data-provenance.md docs/rules/scientific-integrity.md
-    docs/rules/destructive-actions.md docs/rules/ci-baseline.md
-    docs/lessons/INDEX.md docs/lessons/PENDING.md docs/lessons/QUARANTINE.md
-    scripts/check.sh scripts/check.ps1 scripts/check.cmd
-    scripts/kernel-hash.sh scripts/ci-watch.sh scripts/new-task.sh
-    scripts/bg.sh scripts/session-context.sh
-    .work/TASK.md .work/done/.gitkeep .work/jobs/.gitkeep
-    .claude/settings.json
-    .claude/agents/reviewer.md .claude/agents/explore.md
-    .claude/agents/worker.md .claude/agents/monitor.md
-    .claude/skills/start/SKILL.md .claude/skills/ship/SKILL.md
-    .claude/skills/retro/SKILL.md .claude/skills/maintain/SKILL.md
-    .agents/skills/start/SKILL.md .agents/skills/ship/SKILL.md
-    .agents/skills/retro/SKILL.md .agents/skills/maintain/SKILL.md
-    .codex/agents/reviewer.toml .codex/agents/worker.toml
-    .codex/agents/monitor.toml
-    .archive/README.md
-  )
-  for f in "${required[@]}"; do
-    [[ -f "$f" ]] || terr "required template file missing: $f"
-  done
+registered_projects="$(dotnet sln InventorScripts.sln list \
+  | tail -n +3 \
+  | tr '\\' '/' \
+  | sed 's/\r$//' \
+  | sort)"
+discovered_projects="$(find projects shared -type f -name '*.csproj' -print \
+  | sed 's#^\./##' \
+  | sort)"
+[[ "$registered_projects" == "$discovered_projects" ]] \
+  || fail "InventorScripts.sln does not contain every .NET project under projects/ and shared/"
 
-  # 4c. CLAUDE.md is exactly the one-line import.
-  [[ "$(cat CLAUDE.md)" == "@AGENTS.md" ]] || terr "CLAUDE.md must be exactly '@AGENTS.md'"
+# Step 5: frozen restore and local tools.
+dotnet tool restore
+dotnet restore InventorScripts.sln --locked-mode
 
-  # 4d. Template placeholders intact; nothing pretends to be started.
-  grep -q '{{FILLED_BY_START}}' AGENTS.md || terr "AGENTS.md lost its {{FILLED_BY_START}} placeholders"
-  grep -q 'Status: TEMPLATE' AGENTS.md || terr "AGENTS.md lost its template status line"
-  # Escaped regex so this line cannot match itself, only the real placeholder.
-  grep -Eq '\{\{FORMAT_CHECK_FILLED_BY_START\}\}' scripts/check.sh || terr "check.sh lost its stack placeholders"
-  # TASK.md is valid in two states: the pristine template, or a live
-  # in-progress task file. Both must carry a declared Budget (ADR-0002).
-  grep -q '^## Budget' .work/TASK.md || terr ".work/TASK.md lost its Budget section"
-  if ! grep -q '{{title}}' .work/TASK.md && ! grep -q '^# Task: ' .work/TASK.md; then
-    terr ".work/TASK.md is neither the pristine template nor an in-progress task"
-  fi
+# Step 6: format check.
+dotnet format InventorScripts.sln --verify-no-changes --no-restore
 
-  # 4e. Agent and skill frontmatter is structurally sound.
-  for f in .claude/agents/*.md .claude/skills/*/SKILL.md .agents/skills/*/SKILL.md; do
-    head -n 1 "$f" | grep -qx -- '---' || terr "frontmatter must open with ---: $f"
-    grep -q '^name:' "$f" || terr "frontmatter missing name: $f"
-    grep -q '^description:' "$f" || terr "frontmatter missing description: $f"
-  done
-  for f in .codex/agents/*.toml; do
-    grep -q '^name = ' "$f" || terr "missing name field: $f"
-    grep -q '^description = ' "$f" || terr "missing description field: $f"
-    grep -q '^developer_instructions = ' "$f" || terr "missing developer_instructions field: $f"
-  done
+# Step 7: typecheck through a full Debug compilation with warnings as errors.
+dotnet build InventorScripts.sln -c Debug --no-restore
 
-  # 4f. settings.json parses as JSON (python3 exists in CI; degrades locally).
-  PY=""
-  command -v python3 >/dev/null 2>&1 && PY=python3
-  [[ -n "$PY" ]] || { command -v python >/dev/null 2>&1 && PY=python; } || true
-  if [[ -n "$PY" ]]; then
-    "$PY" -c 'import json; json.load(open(".claude/settings.json"))' \
-      || terr ".claude/settings.json is not valid JSON"
-  else
-    echo "WARNING: python not found; settings.json not validated here (CI validates it)."
-  fi
+# Step 8: analyzer lint.
+dotnet format analyzers InventorScripts.sln --verify-no-changes --no-restore
 
-  # 4g. Shell scripts keep their executable bit in the git index.
-  nonexec="$(git ls-files -s scripts/ | awk '$1 != "100755" && $4 ~ /\.sh$/ {print $4}')"
-  [[ -z "$nonexec" ]] || terr "scripts lost the executable bit: $nonexec"
+# Step 9: all registered .NET tests and project-local script checks.
+dotnet test InventorScripts.sln -c Debug --no-build --no-restore
+shopt -s nullglob
+for project_check in projects/*/scripts/check.sh; do
+  bash "$project_check"
+done
+shopt -u nullglob
 
-  # 4h. Style: plain hyphens only (kernel rule 20). Tracked files only.
-  # Needs grep with PCRE (GNU); where unavailable this defers to CI.
-  rc=0
-  dashes="$(git grep -IPn '[\x{2013}\x{2014}]' 2>/dev/null)" || rc=$?
-  if (( rc == 0 )); then
-    printf '%s\n' "$dashes" | head -20
-    terr "em or en dash found; plain hyphens only"
-  elif (( rc > 1 )); then
-    echo "WARNING: git grep -P unavailable; dash check deferred to CI."
-  fi
+# Step 10: secret scan over Git history and the working tree.
+gitleaks git --config .gitleaks.toml --redact --no-banner
+gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
-  if (( tfail )); then
-    fail "template self-test found the problems listed above"
-  fi
-  echo "template self-test: OK (${#required[@]} required files, script syntax, frontmatter, placeholders, style)"
-  exit 0
+# Step 11: production build.
+dotnet build InventorScripts.sln -c Release --no-restore
+
+# Step 12: project-owned mutation testing for changed production C# files, or all files on request.
+mutation_base=""
+if git rev-parse --verify origin/main >/dev/null 2>&1; then
+  mutation_base="$(git merge-base HEAD origin/main || true)"
+elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+  mutation_base="HEAD^"
 fi
 
-# Steps 5+: stack gauntlet. The start procedure (docs/procedures/start.md,
-# step 3) replaces this block with real commands from the stack reference
-# table in docs/BLUEPRINT.md section 4. Every role is filled or the gap is
-# logged in START_REPORT.md with a reason. FULL_MUTATION=1 selects the full
-# mutation run instead of changed-files-only.
-#
-#  5. Format check           {{FORMAT_CHECK_FILLED_BY_START}}
-#  6. Typecheck              {{TYPECHECK_FILLED_BY_START}}
-#  7. Lint + boundary rules  {{LINT_FILLED_BY_START}}
-#  8. Tests                  {{TESTS_FILLED_BY_START}}
-#  9. Secret scan (gitleaks) {{GITLEAKS_FILLED_BY_START}}
-# 10. Production build       {{BUILD_FILLED_BY_START, or remove if no build}}
-# 11. Mutation testing       {{MUTATION_FILLED_BY_START, honor FULL_MUTATION}}
-# 12. CHANGELOG freshness    {{CHANGELOG_FRESHNESS_FILLED_BY_START:
-#     regenerate with git-cliff to a temp path and diff; fail on drift}}
+mutation_runs=0
+for unit_dir in projects/* shared/*; do
+  [[ -d "$unit_dir/src" ]] || continue
+  find "$unit_dir/src" -type f -name '*.cs' -print -quit | grep -q . || continue
 
-fail ".start-done exists but the stack gauntlet is not wired. Complete docs/procedures/start.md step 3, or remove .start-done."
+  mutation_check="$unit_dir/scripts/mutation.sh"
+  [[ -f "$mutation_check" ]] \
+    || fail "$unit_dir contains production C# but has no scripts/mutation.sh"
+
+  mutation_needed=$FULL_MUTATION
+  if (( ! mutation_needed )) && [[ -n "$mutation_base" ]] \
+      && git diff --name-only "$mutation_base"...HEAD -- "$unit_dir/src" | grep -Eq '\.cs$'; then
+    mutation_needed=1
+  fi
+  if (( ! mutation_needed )) \
+      && git status --porcelain --untracked-files=all -- "$unit_dir/src" | grep -Eq '\.cs$'; then
+    mutation_needed=1
+  fi
+
+  if (( mutation_needed )); then
+    bash "$mutation_check"
+    mutation_runs=$((mutation_runs + 1))
+  fi
+done
+
+if (( ! mutation_runs )); then
+  echo "mutation: skipped - no production C# changes relative to ${mutation_base:-the current tree}"
+fi
+
+# Step 13: generated changelog freshness.
+[[ -f CHANGELOG.md ]] || fail "CHANGELOG.md is missing; regenerate it with git-cliff"
+changelog_tmp="$(mktemp)"
+trap 'rm -f "$changelog_tmp"' EXIT
+git-cliff --config cliff.toml --output "$changelog_tmp"
+diff -u CHANGELOG.md "$changelog_tmp" \
+  || fail "CHANGELOG.md is stale; regenerate it with git-cliff"
+
+echo "check: OK"

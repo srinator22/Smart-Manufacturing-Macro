@@ -1,24 +1,36 @@
-# Environment manifest (declarative - start checks, reports, degrades; it does not assume)
+# Inventor Scripts environment manifest
 
-Required for start to complete: git; a working language toolchain; ability to execute scripts/check.sh end to end. Native Windows shells run it via scripts\check.cmd (execution-policy safe) or scripts/check.ps1; both locate Git Bash and forward to the same script.
-Strongly recommended: gh CLI (checks, releases, branch protection, repo metadata); gitleaks; git-cliff.
-Recommended methodology plugin (Claude Code): Superpowers, via the official plugin marketplace (VERIFY current install command at start time). Other harnesses: docs/procedures/ is the fallback methodology.
-Policy: CLI tools over MCP servers. MCP schemas cost resident context every turn; CLIs cost nothing until invoked. Add an MCP server only when no CLI equivalent exists; record the justification as an ADR.
-Search: prefer rg for repository text search. Edits: patch-based, scoped, reviewable. Non-interactive commands; deterministic scripts.
+## Required
 
-## Delegation accelerators (harness-specific; kernel rule 16 governs)
+- Windows 11 x64
+- Git and Git Bash; native Windows entry point is `scripts\check.cmd`
+- Autodesk Inventor 2027 installed at `C:\Program Files\Autodesk\Inventor 2027`
+- Inventor API v31 interop assembly under Inventor 2027 `Bin\Public Assemblies`
+- .NET SDK 10.0.401, pinned by `global.json`
+- Network access to NuGet during dependency restore
+- `gitleaks` 8.30.1
+- `git-cliff` 2.14.1
+- Local .NET tool restore for Stryker.NET 5.0.0
 
-- Claude Code: for large parallel scoped work (per-file audits, mass
-  migrations, extraction across many documents), prefer a dynamic workflow
-  over hand-rolled worker spawning - Claude writes the orchestration script,
-  intermediate state lives in script variables instead of the advisor's
-  context, and caps are 16 concurrent / 1,000 total per run (VERIFY current
-  availability and caps in the Claude Code workflows docs at run time).
-  Declare the TASK.md Budget before any fan-out and define the reducer first.
-- Never fragment coherent-context work (architecture design, tightly coupled
-  refactors, narrative documents). One context, per kernel rule 16.
-- Parallel edit isolation: concurrent edit-capable workers each get their
-  own git worktree; within one tree, two workers never touch the same file
-  (kernel rule 16).
-- Other harnesses: use the native parallel mechanism or sequential workers;
-  the budget-first and reducer-first rules still apply.
+## Interactive development
+
+- Visual Studio Community 2026 version 18.0 or later
+- .NET desktop development workload for WPF and C#
+- Autodesk Inventor 2027 Developer Tools from the installed SDK folder
+
+The command-line SDK is enough for workspace format, build, test, and mutation checks. Visual Studio and Autodesk Developer Tools are required before interactive add-in debugging in Inventor.
+
+## Repository policy
+
+- CLI tools are preferred over MCP servers when the CLI covers the need.
+- Search uses `rg`; edits are patch-based and reviewable.
+- Installs and CI tool downloads are version-pinned and package lockfiles are committed.
+- No Autodesk binaries, customer CAD, production exports, user classifications, private URLs, or credentials enter Git.
+- Independent automations live under `projects/`; only proven cross-project components live under `shared/`.
+
+## Agent routing
+
+- Primary orchestration: GPT-6 Astra at medium reasoning.
+- Substantive coding and adversarial review: GPT-5.6 Sol at medium or high reasoning.
+- Bounded low-stakes edits, exploration, and CI monitoring: GPT-5.6 Terra at low or medium reasoning.
+- Delegate only independent bounded work when it improves elapsed time or verification enough to justify the added token use.

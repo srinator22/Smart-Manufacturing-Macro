@@ -1,7 +1,7 @@
 # Contributing
 
-This template is designed to be operated by coding agents, with humans
-approving direction. Contributions follow the same rules the agents do.
+This project is operated by coding agents with human direction.
+Contributions follow the same safety and verification rules.
 
 - Read AGENTS.md first. The kernel block is hash-pinned: editing it
   requires human approval plus `scripts/kernel-hash.sh --update` in the
@@ -14,6 +14,13 @@ approving direction. Contributions follow the same rules the agents do.
   <= 8 skills.
 - Removing anything means moving it to `.archive/` with a one-line
   reason, never deleting.
-- The template stays project-agnostic: no stacks, dependencies, or
-  example code. Per-project wiring happens via docs/procedures/start.md
-  in the cloned project, not here.
+- Do not invent Inventor APIs, translator identifiers, threading safety,
+  or supported export options. Cite Autodesk documentation or the
+  installed Inventor 2027 interop surface in the task record.
+- Keep Autodesk COM types inside InventorAdapter or the AddIn host edge.
+  Unit-test pure rules and workflows without requiring Inventor.
+- Keep each automation under `projects/<kebab-case-name>/` with its own
+  README, requirements, source, and tests. Register compiled projects in
+  `InventorScripts.sln` and in the root project catalog.
+- Add code to `shared/` only when at least two projects consume a stable
+  contract.

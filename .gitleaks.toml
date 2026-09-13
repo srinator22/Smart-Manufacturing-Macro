@@ -1,0 +1,4 @@
+title = "Smart Manufacturing Exporter gitleaks configuration"
+
+[extend]
+useDefault = true

@@ -1,46 +1,71 @@
-# Agentic template repository
+# Inventor Scripts
 
-A greenfield template for fully AI-operated projects. It contains no
-application code. It gives any coding agent that opens it: a governing
-instruction file (AGENTS.md), an enforcement gauntlet (scripts/check.sh,
-mirrored exactly in CI), a memory system that learns from external signal
-and forgets on schedule, a task-state protocol that survives context
-compaction, a delegation model, and a one-shot start ritual that
-interviews the human and rewrites the repo for the specific project.
+Inventor Scripts is a Windows workspace for building and maintaining independent Autodesk Inventor automations. It keeps add-ins, engineering utilities, and script-based tools in separate project folders while sharing one pinned Inventor 2027 development environment and one verification entry point.
 
-## Quickstart
+The workspace currently targets Autodesk Inventor 2027 only. Support for another Inventor release requires its own compatibility evidence and architecture decision.
 
-1. Clone this repository (or use it as a GitHub template).
-2. Open your coding agent in it.
-3. Say "run /start" (Claude Code) or "follow docs/procedures/start.md"
-   (any harness).
-4. Answer one batched interview. The repo rewrites itself for your
-   project: stack wired into check.sh and CI, decisions recorded, this
-   README replaced.
+## Project catalog
 
-## Philosophy
+| Project | Kind | Status |
+| --- | --- | --- |
+| [Smart Manufacturing Exporter](projects/smart-manufacturing-exporter/README.md) | C#/.NET WPF add-in | Foundation complete; Phase 1 behavior next |
 
-- Checks over prose: a rule that can be a script cannot be ignored.
-- External signal only: tests, CI, and human reports are ground truth.
-- Memory that forgets: every lesson has a retire condition and a cap.
+## Workspace layout
 
-## Where things live
+```text
+projects/
+  <project-name>/
+    README.md       project purpose, setup, and commands
+    docs/           project-specific requirements and architecture
+    src/            production code or Inventor scripts
+    tests/          deterministic and integration tests
+shared/             code used by at least two Inventor projects
+docs/               workspace-wide architecture, rules, and decisions
+scripts/            repository checks and maintenance commands
+InventorScripts.sln all registered .NET projects
+```
 
-- `AGENTS.md` - source of truth: kernel, standards, rules index, project
-  decisions
-- `docs/procedures/` - start, ship, retro, maintain, bugfix, audit,
-  longjob
-- `docs/rules/` - triggered reference rules, indexed in AGENTS.md
-- `docs/lessons/` - gated, counted, expiring memory
-- `.work/` - current task state, committed so it survives compaction
-- `scripts/` - the gauntlet and its helpers
-- `.claude/` - optional accelerators; the repo works without them
-- `.codex/agents/`, `.agents/skills/` - the same accelerators for Codex
+Each project owns its product requirements and host integration details. Shared configuration at the root provides C# 14, .NET 10.0.401, analyzers, package locking, secret scanning, changelog generation, and CI. Autodesk binaries, customer CAD, generated manufacturing files, and user configuration never enter Git.
 
-Verification is `./scripts/check.sh` everywhere; on native Windows,
-`scripts\check.cmd` is the one-command entry (it bypasses the machine
-execution policy for that invocation and forwards through check.ps1 to
-the same script via Git Bash).
+## Requirements
 
-Note: /start rewrites this README for the project. Add a LICENSE before
-publishing anything built from this template.
+- Windows 11 x64
+- Autodesk Inventor 2027
+- .NET SDK 10.0.401, pinned by `global.json`
+- Visual Studio Community 2026 or later with .NET desktop development for interactive WPF debugging
+- Autodesk Inventor 2027 Developer Tools for Inventor templates and SDK samples
+- `gitleaks` 8.30.1 and `git-cliff` 2.14.1 for the full local check
+
+## Build and verify everything
+
+From PowerShell or Command Prompt:
+
+```bat
+scripts\check.cmd
+```
+
+From Git Bash:
+
+```bash
+./scripts/check.sh
+```
+
+Useful direct commands:
+
+```powershell
+dotnet restore InventorScripts.sln --locked-mode
+dotnet build InventorScripts.sln -c Release --no-restore
+dotnet test InventorScripts.sln -c Release --no-build --no-restore
+```
+
+## Adding another Inventor project
+
+1. Create `projects/<kebab-case-name>/` with its own README, docs, source, and tests.
+2. Record its Inventor host version and safety boundary before implementation.
+3. Add every .NET project to `InventorScripts.sln`, grouped below that product's solution folder.
+4. Keep Autodesk COM references at the host adapter edge and keep domain logic COM-free.
+5. For production C#, add `projects/<name>/scripts/mutation.sh`; the root gate requires and runs it when that project's code changes.
+6. For non-.NET automation, add `projects/<name>/scripts/check.sh`; the root gate discovers and runs it.
+7. Add the project to the catalog above and run the full root check.
+
+Use `shared/` only after the same stable capability has two real consumers. This avoids coupling otherwise independent Inventor tools through speculative abstractions.

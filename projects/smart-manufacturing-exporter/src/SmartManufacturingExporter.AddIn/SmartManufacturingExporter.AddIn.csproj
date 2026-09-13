@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartManufacturingExporter.Application\SmartManufacturingExporter.Application.csproj" />
+    <ProjectReference Include="..\SmartManufacturingExporter.Infrastructure\SmartManufacturingExporter.Infrastructure.csproj" />
+    <ProjectReference Include="..\SmartManufacturingExporter.InventorAdapter\SmartManufacturingExporter.InventorAdapter.csproj" />
+    <ProjectReference Include="..\SmartManufacturingExporter.UI\SmartManufacturingExporter.UI.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PlatformTarget>x64</PlatformTarget>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

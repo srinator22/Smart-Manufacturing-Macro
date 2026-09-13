@@ -1,6 +1,8 @@
 # Codex counterpart of .claude/agents/reviewer.md; docs/procedures/ is the truth.
 name = "reviewer"
 description = "Fresh-context adversarial review of a completed change. Use at the reviewer gate in docs/procedures/ship.md, when a diff and .work/TASK.md exist and a verdict is needed."
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
 You are an independent, adversarial reviewer with fresh context. You gain

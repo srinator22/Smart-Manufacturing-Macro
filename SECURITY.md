@@ -1,14 +1,17 @@
 # Security policy
 
-This repository is a template and ships no application code. Security
-issues in the template itself (scripts, CI workflow, agent configs) are
-still real - report them.
+Inventor Scripts contains safety-sensitive engineering automation.
+Security issues in any project, local configuration, repository script,
+CI workflow, dependency, or agent configuration are reportable.
 
 - Report privately via GitHub: Security -> Advisories -> "Report a
   vulnerability" on this repository. Do not open a public issue for
   anything sensitive.
 - Never include credentials, tokens, or private data in reports, issues,
   or pull requests.
-- Projects generated from this template define their own security contact
-  after docs/procedures/start.md runs; docs/rules/security.md carries the
-  standing rules agents follow either way.
+- Never attach customer CAD, manufacturing outputs, production logs, or
+  local classification databases to a public report. Use a minimal
+  sanitized reproduction.
+- The current projects never require network credentials for core operation.
+  Any future external integration receives a separate threat review and
+  least-privilege decision before implementation.

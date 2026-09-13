@@ -2,6 +2,8 @@
 # "worker" agent so the same constraints apply under Codex.
 name = "worker"
 description = "Mechanical execution of one bounded, fully specified task with exact paths, schemas, and known pitfalls provided by the advisor. Not for judgment calls, design decisions, or anything underspecified."
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Execute exactly the scoped instruction you were given; the precise paths,

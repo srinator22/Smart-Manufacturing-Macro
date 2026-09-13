@@ -36,6 +36,10 @@ These rules govern process. Project truth lives in the Project decisions section
 - No speculative abstraction: three similar lines beat a premature abstraction. Match the surrounding code's idioms. Typed arrays and minimal allocation in numeric hot loops; measure before optimizing and record before/after evidence.
 - Local folders mirroring canonical records are named by the canonical ID, no parallel schemes.
 - README stays present-tense: what the thing IS, not a history.
+- C# 14 nullable reference types and analyzers stay enabled; warnings are errors.
+- Inventor COM types stay inside InventorAdapter and AddIn. Core, Application, Infrastructure, and UI never reference Autodesk interop assemblies.
+- Inventor API calls run on Inventor's owning STA thread. Background work is limited to typed, COM-free models and pure CPU or filesystem operations.
+- Export planning is side-effect free. Source documents are never silently saved or changed, and output conflicts are resolved before an exporter writes.
 
 ## Response shape
 
@@ -56,15 +60,16 @@ These rules govern process. Project truth lives in the Project decisions section
 
 ## Project decisions
 
-Status: TEMPLATE - not initialized. Run docs/procedures/start.md before any project work.
+Status: ACTIVE - initialized as the Inventor Scripts workspace.
 
-- Purpose, users, non-goals, boundary: {{FILLED_BY_START}}
-- Ownership and visibility: {{private/public, solo/team}}
-- Git workflow: {{branch+gated merge (default) OR direct-to-main, recorded as an explicit choice}}
-- Release model and versioning source of truth: {{FILLED_BY_START}}
-- Deploy target and exposure: {{FILLED_BY_START or none}}
+- Purpose, users, non-goals, boundary: A Windows workspace for multiple independent Autodesk Inventor 2027 scripts, add-ins, and engineering utilities. Each automation owns a folder under `projects/`; Smart Manufacturing Exporter is the first project. Inventor COM access, local configuration, and output files are within project boundaries; CAD authoring, silent source-file mutation, cloud services, and pre-2027 compatibility are outside the initial boundary.
+- Ownership and visibility: Public GitHub repository, solo-owned by srinator22.
+- Git workflow: Branch plus pull request with gated merge to main; direct-to-main is not a standing choice.
+- Release model and versioning source of truth: Workspace-wide semantic versioning before 1.0; Directory.Build.props VersionPrefix is authoritative and annotated Git tags use vX.Y.Z. Independent project release trains require an ADR first.
+- Deploy target and exposure: No hosted deployment. Each project defines its own local Inventor 2027 artifact; Smart Manufacturing Exporter's planned deliverable is a user-level add-in package published through GitHub Releases after validation.
 - Canonical verification: ./scripts/check.sh
-- Data policy: {{what may enter git; where large/private data lives}}
-- Risk profile: {{ordinary / scientific / safety-sensitive / embedded}}
-- Standing overrides recorded by the human: {{none yet}}
-- Stack and commands: {{FILLED_BY_START - must exactly match scripts/check.sh}}
+- Data policy: Only source code, self-hosted UI assets, example presets, schemas, and small sanitized fixtures may enter git. Customer CAD, production exports, classifications, and user settings stay local outside the repository. External fixtures require source linkage and a SHA-256 digest.
+- Risk profile: Safety-sensitive engineering export tooling. No claim of manufacturing or regulatory validation without external evidence.
+- Standing overrides recorded by the human: Autopilot is the default task mode. Codex uses Astra for orchestration, Sol for substantive implementation/review, and Terra for bounded low-stakes work; avoid delegation when it would add tokens without improving speed or quality.
+- Workspace structure: independent automations live in `projects/<kebab-case-name>/`; shared code requires two real consumers and lives in `shared/`; every compiled project is registered in `InventorScripts.sln`.
+- Stack and commands: C# 14, .NET 10.0.401, WPF, x64, Inventor 2027 API v31. Restore: dotnet restore InventorScripts.sln --locked-mode. Format: dotnet format InventorScripts.sln --verify-no-changes --no-restore. Typecheck/build: dotnet build InventorScripts.sln -c Release --no-restore. Lint/boundaries: dotnet format analyzers plus project architecture tests. Tests: dotnet test InventorScripts.sln. Mutation: dotnet stryker. Secrets: gitleaks git and gitleaks dir. Canonical wrapper: scripts/check.sh or scripts\check.cmd on Windows.

@@ -17,6 +17,7 @@ Desktop.ini
 *.swo
 .idea/
 .vscode/
+.vs/
 
 # Caches, coverage, build products
 .cache/
@@ -30,3 +31,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 target/
+bin/
+obj/
+TestResults/
+StrykerOutput/

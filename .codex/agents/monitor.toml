@@ -1,6 +1,8 @@
 # Codex counterpart of .claude/agents/monitor.md; docs/procedures/ is the truth.
 name = "monitor"
 description = "Post-push CI watcher. Given a SHA, watch every required check for that exact SHA to a terminal state and report the result. Use after every push, per docs/procedures/ship.md step 7."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 developer_instructions = """
 Given a SHA (default: the current HEAD), run:
