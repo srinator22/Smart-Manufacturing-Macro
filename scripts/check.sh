@@ -121,7 +121,10 @@ if (( ! mutation_runs )); then
   echo "mutation: skipped - no production C# changes relative to ${mutation_base:-the current tree}"
 fi
 
-# Step 13: generated changelog freshness.
+# Step 13: changelog release-boundary regression.
+bash ./scripts/test-changelog.sh
+
+# Step 14: generated changelog freshness.
 [[ -f CHANGELOG.md ]] || fail "CHANGELOG.md is missing; regenerate it with git-cliff"
 changelog_tmp="$(mktemp)"
 trap 'rm -f "$changelog_tmp"' EXIT
