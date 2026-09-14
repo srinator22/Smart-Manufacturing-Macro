@@ -1,8 +1,23 @@
 # Smart Manufacturing Exporter
 
-Smart Manufacturing Exporter is a Windows add-in for Autodesk Inventor 2027. It is designed to scan an assembly as an engineering hierarchy, explain automatic inclusion and exclusion decisions, let the user review the exact manufacturing scope, and coordinate safe STEP, sheet-metal DXF, and drawing exports.
+Smart Manufacturing Exporter `0.2.1` is a Windows add-in for Autodesk Inventor 2027. It reviews unique top-level parts in an assembly and exports an explicit selection as STEP files.
 
-This is the first product inside the Inventor Scripts workspace. Phase 1 provides the bounded minimum viable exporter: an Inventor add-in command, active-assembly validation, unique top-level part scanning, an explicit WPF checklist, and safe STEP export. Live Inventor acceptance remains separate from compilation and unit verification.
+Phase 1 is ready for live Inventor testing. Compilation, automated tests, and packaging pass; the documented five-part Inventor acceptance scenario is not yet claimed as run.
+
+## What it does
+
+- Adds a Smart Export command to the Inventor Assembly ribbon.
+- Requires a saved assembly to be the active document.
+- Scans direct top-level occurrences and includes saved Inventor part documents.
+- Excludes suppressed occurrences, assemblies, and unsupported document types.
+- Deduplicates repeated source paths case-insensitively and shows their top-level quantity.
+- Selects all eligible parts by default and provides Select All and Select None controls.
+- Exports only checked rows through Inventor 2027's installed STEP translator.
+- Rejects unwritable destinations and existing output conflicts.
+- Atomically finalizes new `.step` files without overwriting another file.
+- Reports per-item success and failure while continuing with later selected items.
+
+The add-in never silently saves, renames, moves, or updates source Inventor documents.
 
 ## Target and safety boundary
 
@@ -38,7 +53,7 @@ The complete development requirements are in [docs/PRODUCT_SPEC.md](docs/PRODUCT
 - Visual Studio Community 2026 may coexist, but Autodesk's Inventor 2027 Developer Tools installer does not detect it as a replacement for Visual Studio 2022
 - `gitleaks` 8.30.1 and `git-cliff` 2.14.1 for the full local gauntlet
 
-## Build and verify
+## Development and verification
 
 Run these commands from the repository root. From PowerShell or Command Prompt:
 
@@ -62,16 +77,65 @@ dotnet build InventorScripts.sln -c Release --no-restore
 dotnet test InventorScripts.sln -c Release --no-build --no-restore
 ```
 
-## Installing for Inventor 2027
+## Install
 
-Build and install the Debug configuration from PowerShell:
+Close Inventor before replacing add-in files. From the repository root in PowerShell, restore, build, and install the Release configuration:
 
 ```powershell
-dotnet build InventorScripts.sln -c Debug
-pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/install-addin.ps1 -Configuration Debug
+dotnet restore InventorScripts.sln --locked-mode
+dotnet build InventorScripts.sln -c Release --no-restore
+pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/install-addin.ps1 -Configuration Release
 ```
 
-The installer copies the built output to `%APPDATA%\Autodesk\Inventor 2027\Addins\SmartManufacturingExporter` and writes `Autodesk.SmartManufacturingExporter.Inventor.addin` in the parent Addins directory. It does not require machine-wide registration. Close Inventor before replacing an installed build, then start Inventor 2027 and confirm Smart Manufacturing Exporter is loaded in the Add-In Manager.
+The installer is per-user and does not require administrator privileges. It writes only these product-owned targets:
+
+```text
+%APPDATA%\Autodesk\Inventor 2027\Addins\SmartManufacturingExporter\
+%APPDATA%\Autodesk\Inventor 2027\Addins\Autodesk.SmartManufacturingExporter.Inventor.addin
+```
+
+For an active debugging session, build and install `Debug` instead of `Release`.
+
+## Verify installation
+
+Before starting Inventor, confirm these files exist:
+
+```text
+%APPDATA%\Autodesk\Inventor 2027\Addins\SmartManufacturingExporter\SmartManufacturingExporter.AddIn.dll
+%APPDATA%\Autodesk\Inventor 2027\Addins\Autodesk.SmartManufacturingExporter.Inventor.addin
+```
+
+Then:
+
+1. Start Autodesk Inventor 2027.
+2. Open Inventor's Add-In Manager and confirm Smart Manufacturing Exporter is loaded.
+3. Open a saved `.iam` assembly.
+4. Confirm the Smart Export tab and Smart Export command appear in the Assembly ribbon.
+
+If Inventor reports a load error or the command does not appear, stop and use the troubleshooting table below before testing exports.
+
+## Use
+
+For the first test, use sanitized CAD files outside the Git repository and choose a new empty output folder.
+
+1. Open a saved Inventor `.iam` assembly and make it the active document.
+2. Open the Smart Export ribbon tab and select Smart Export.
+3. Review the checklist. Each row represents one unique saved direct top-level `.ipt` document; Quantity is the number of matching top-level occurrences.
+4. Use Select None and then check only the parts you want, or leave all eligible parts selected.
+5. Select Browse and choose an existing writable destination directory.
+6. Select Export STEP.
+7. Read the status message at the bottom of the window. It reports the successful and failed export counts and identifies individual failures.
+8. Confirm the destination contains one `<part-filename>.step` file for each successful selected row.
+
+Expected safety behavior:
+
+- A part document or no active document shows `Smart Export requires an active Inventor assembly.`
+- An unsaved active assembly is rejected before scanning.
+- An existing destination filename blocks the plan instead of being overwritten.
+- A conflict that appears during export causes that item to fail without replacing the conflicting file.
+- A failure for one selected part does not prevent later selected parts from being attempted.
+
+The formal five-part first-test procedure and evidence checklist are in [docs/PHASE1_TEST_PLAN.md](docs/PHASE1_TEST_PLAN.md).
 
 ## Debugging in Inventor
 
@@ -83,7 +147,17 @@ The installer copies the built output to `%APPDATA%\Autodesk\Inventor 2027\Addin
 
 Inventor API calls and STEP translation remain on Inventor's owning STA thread. The COM-free workflow and view model can be debugged without starting Inventor.
 
-## Uninstalling
+## Update
+
+1. Close Inventor 2027.
+2. Pull or check out the desired tested revision.
+3. Run the locked restore and build commands from the Install section.
+4. Run `install-addin.ps1` again with the same configuration.
+5. Restart Inventor and verify the add-in and command before exporting.
+
+The installer replaces only this add-in's per-user binary directory and manifest. It does not modify machine-wide registration or another Inventor add-in.
+
+## Uninstall
 
 Close Inventor, then run:
 
@@ -91,16 +165,44 @@ Close Inventor, then run:
 pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/uninstall-addin.ps1
 ```
 
-The script validates and removes only this add-in's per-user manifest and binary directory. Machine-level deployment remains outside Phase 1.
+The script validates and removes only this add-in's per-user manifest and binary directory. It does not remove Autodesk components, source code, or exported files.
 
-## Phase 1 limitations
+## Troubleshooting
+
+| Symptom | Check | Resolution |
+| --- | --- | --- |
+| Add-in is absent from the Add-In Manager | Confirm the two paths in Verify installation exist and the manifest points to the installed DLL. | Close Inventor, rebuild, rerun the installer, and restart Inventor 2027. |
+| Inventor reports an add-in load error | Confirm this is Inventor 2027 and the `net10.0-windows` x64 build completed without errors. | Run `scripts\check.cmd`, reinstall the matching Release or Debug output, and retain the exact load message if it persists. |
+| Smart Export tab is missing | Confirm Smart Manufacturing Exporter is loaded and a saved assembly is active. | Activate a `.iam` document. Restart Inventor after the first installation if needed. |
+| The checklist is empty or missing expected content | Phase 1 includes only saved direct top-level `.ipt` documents. | Check for suppressed occurrences, subassemblies, unsaved parts, or parts that exist only below a subassembly. |
+| Destination is rejected | The folder must already exist and grant permission to add files. | Create or choose a writable folder owned by the current user. |
+| Export is blocked by an existing file | Phase 1 never overwrites an existing `.step`. | Choose a new empty destination or manually move the old output after confirming it is safe to do so. |
+| One item reports a STEP translator failure | Confirm Autodesk's STEP translator is installed and available in Inventor 2027. | Retry with one sanitized part and retain the complete error message for diagnosis. |
+| Updated DLL cannot be copied or loaded | Inventor may still hold the assembly open. | Close every Inventor process, rerun the installer, and restart Inventor. |
+
+When reporting a problem, include the Inventor 2027 display version, add-in version, active document type, exact status or load message, and whether the same part exports through Inventor's built-in STEP command. Do not attach proprietary CAD.
+
+## Versioning and changelog
+
+The workspace currently uses one semantic version for all Inventor projects before `1.0`:
+
+- [Directory.Build.props](../../Directory.Build.props) contains the authoritative `VersionPrefix`.
+- [CHANGELOG.md](../../CHANGELOG.md) is generated from Conventional Commits and is never hand-edited.
+- The add-in activation manifest version is mechanically checked against `VersionPrefix`.
+- Annotated release tags use `vX.Y.Z`.
+
+Independent per-plugin version numbers and changelogs are not active yet. They require an architecture decision once multiple plugins genuinely need separate release schedules. Until then, every plugin README links to the workspace changelog and states which workspace version it documents.
+
+## Known limitations
 
 - Scanning is limited to unique top-level part documents. Recursive subassemblies begin in Phase 2.
+- The checklist does not yet display detailed exclusion notices.
 - Existing STEP files are blocking conflicts and are never silently overwritten.
 - STEP translation uses Inventor 2027's installed translator defaults. AP203, AP214, and AP242 option selection begins only after the exact option keys are verified.
 - Browser folders, classifications, smart rules, DXF, PDF, presets, and quick export remain later phases.
 - The live five-part acceptance result is not claimed until the [Phase 1 test plan](docs/PHASE1_TEST_PLAN.md) is executed in Inventor 2027.
+- A one-click installer and GitHub Release package are not published before live acceptance passes.
 
-## Development workflow
+### Development workflow
 
 Changes use short branches and pull requests into protected `main`. `Directory.Build.props` is the version source of truth, releases use annotated `vX.Y.Z` tags, and CI runs the same `scripts/check.sh` entry point as local development.

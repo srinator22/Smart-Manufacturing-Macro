@@ -40,10 +40,8 @@ need gitleaks
 need git-cliff
 
 # Step 4: workspace registration and project contracts.
-while IFS= read -r project_dir; do
-  [[ -f "$project_dir/README.md" ]] \
-    || fail "$project_dir is missing its project README"
-done < <(find projects -mindepth 1 -maxdepth 1 -type d -print | sort)
+bash ./scripts/test-project-readmes.sh
+bash ./scripts/check-project-readmes.sh
 
 registered_projects="$(dotnet sln InventorScripts.sln list \
   | tail -n +3 \
