@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 
 namespace SmartManufacturingExporter.ArchitectureTests;
 
@@ -74,6 +75,59 @@ public sealed class ProjectBoundaryTests
                     $"{projectFile} crosses the project boundary into {referencedPath}.");
             }
         }
+    }
+
+    [Fact]
+    public void InventorInteropUsageStaysInsideHostAdapters()
+    {
+        string sourceRoot = Path.Combine(FindProjectRoot(), "src");
+        string[] allowedDirectories =
+        [
+            Path.Combine(sourceRoot, "SmartManufacturingExporter.AddIn"),
+            Path.Combine(sourceRoot, "SmartManufacturingExporter.InventorAdapter"),
+        ];
+
+        string[] violations = Directory
+            .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("bin", StringComparer.OrdinalIgnoreCase))
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj", StringComparer.OrdinalIgnoreCase))
+            .Where(path => !allowedDirectories.Any(directory => path.StartsWith(directory, StringComparison.OrdinalIgnoreCase)))
+            .Where(path => Regex.IsMatch(
+                File.ReadAllText(path),
+                @"(?:using\s+Inventor(?:\.|\s*;)|\bInventor\.)",
+                RegexOptions.CultureInvariant))
+            .Select(path => Path.GetRelativePath(sourceRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            $"Inventor interop usage is restricted to AddIn and InventorAdapter. Violations: {string.Join(", ", violations)}");
+    }
+
+    [Fact]
+    public void ActivationManifestVersionMatchesVersionPrefix()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        XDocument buildProperties = XDocument.Load(Path.Combine(repositoryRoot, "Directory.Build.props"));
+        string versionPrefix = buildProperties
+            .Descendants("VersionPrefix")
+            .Single()
+            .Value
+            .Trim();
+
+        string manifestPath = Path.Combine(
+            FindProjectRoot(),
+            "src",
+            "SmartManufacturingExporter.AddIn",
+            "SmartManufacturingExporter.AddIn.X.manifest");
+        XDocument manifest = XDocument.Load(manifestPath);
+        XElement identity = manifest
+            .Descendants()
+            .Single(element => element.Name.LocalName == "assemblyIdentity");
+        string? manifestVersion = identity.Attribute("version")?.Value;
+
+        Assert.Equal($"{versionPrefix}.0", manifestVersion);
     }
 
     private static string FindProjectRoot()

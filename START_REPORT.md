@@ -1,6 +1,7 @@
 # Start report
 
 Date: 2026-09-13
+Last verified: 2026-09-14
 Project: Inventor Scripts workspace
 
 ## Detected
@@ -19,6 +20,9 @@ Project: Inventor Scripts workspace
 - gitleaks 8.30.1.
 - git-cliff 2.14.1.
 - Stryker.NET 5.0.0 as a repository-local .NET tool.
+- Visual Studio Community 2022 17.14.40 with the Managed Desktop workload.
+- Visual Studio Community 2026 18.10.0 with the Managed Desktop workload, installed side-by-side.
+- Autodesk Inventor 2027 Developer Tools 19.0.0, including the Inventor 2027 C# and VB add-in templates for Visual Studio 2022.
 
 ## Wired
 
@@ -33,13 +37,11 @@ Project: Inventor Scripts workspace
 
 ## Missing or degraded
 
-- Visual Studio Community 2026 is not installed. Its installer reached a UAC elevation prompt and Windows reported that the prompt was declined or timed out.
-- Autodesk Inventor 2027 Developer Tools is not installed because its MSI requires Visual Studio. The MSI failure was reproduced with the exact launch condition and recorded in the gitignored installer log.
-- Inventor interop is deliberately not referenced by the scaffold. Phase 1 will add the reference only after API research defines the exact adapter surface, so the foundation remains compilable and CI-verifiable without redistributing Autodesk binaries.
-- No live Inventor integration test ran during initialization because Phase 1 add-in code and the five-part fixture do not yet exist.
+- Autodesk's Inventor 2027 Developer Tools installer does not recognize Visual Studio Community 2026. Visual Studio Community 2022 is therefore retained as the supported template and debugging host.
+- The local v31 Inventor interop reference is conditional so CI can build without redistributing Autodesk binaries. Windows development machines with Inventor 2027 compile the real adapter and add-in server.
+- The Phase 1 five-part live Inventor acceptance scenario remains unverified until the add-in is installed, loaded, and exercised against a sanitized assembly.
 
 ## Manual steps
 
-- Install Visual Studio Community 2026 with the .NET desktop development workload by accepting the Windows UAC prompt.
-- After Visual Studio is present, run `C:\Users\Public\Documents\Autodesk\Inventor 2027\SDK\developertools.msi` and verify the templates and SDK samples.
-- Phase 1 must verify `ApplicationAddInServer`, assembly traversal, ribbon APIs, and STEP translator behavior against Autodesk documentation and the installed v31 interop assembly before implementation.
+- Build and install the Phase 1 add-in with the product-owned per-user installation script.
+- Run the documented five-unique-part scenario in Inventor 2027 and record whether selecting three parts produces exactly three STEP files without changing any source document.

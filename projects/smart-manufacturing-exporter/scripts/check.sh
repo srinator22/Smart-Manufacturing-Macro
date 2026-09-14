@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Product-local checks that are discovered by the workspace gauntlet.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$ROOT"
+
+command -v pwsh >/dev/null 2>&1 \
+  || { echo "CHECK FAILED: pwsh is required for the add-in packaging test" >&2; exit 1; }
+
+pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/test-packaging.ps1

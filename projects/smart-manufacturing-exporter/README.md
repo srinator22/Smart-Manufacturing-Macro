@@ -2,7 +2,7 @@
 
 Smart Manufacturing Exporter is a Windows add-in for Autodesk Inventor 2027. It is designed to scan an assembly as an engineering hierarchy, explain automatic inclusion and exclusion decisions, let the user review the exact manufacturing scope, and coordinate safe STEP, sheet-metal DXF, and drawing exports.
 
-This is the first product inside the Inventor Scripts workspace. It currently contains an initialized .NET 10 architecture skeleton. Phase 1 add-in behavior is the next milestone; no DLL in this setup commit is presented as a working Inventor add-in.
+This is the first product inside the Inventor Scripts workspace. Phase 1 provides the bounded minimum viable exporter: an Inventor add-in command, active-assembly validation, unique top-level part scanning, an explicit WPF checklist, and safe STEP export. Live Inventor acceptance remains separate from compilation and unit verification.
 
 ## Target and safety boundary
 
@@ -12,6 +12,8 @@ This is the first product inside the Inventor Scripts workspace. It currently co
 - Source Inventor documents are never silently saved, renamed, moved, or modified
 - Conflicting output files are never silently overwritten
 - Inventor API behavior is implemented only after verification against Autodesk documentation or the installed Inventor 2027 interop assembly
+
+The verified Phase 1 API surface and remaining live-host uncertainties are recorded in [docs/INVENTOR_2027_API_COMPATIBILITY.md](docs/INVENTOR_2027_API_COMPATIBILITY.md).
 
 The complete development requirements are in [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md). Product architecture is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and workspace decisions are in [../../docs/decisions](../../docs/decisions).
 
@@ -31,8 +33,9 @@ The complete development requirements are in [docs/PRODUCT_SPEC.md](docs/PRODUCT
 - Windows 11 x64
 - Autodesk Inventor 2027
 - .NET SDK 10.0.401, pinned by `global.json`
-- Visual Studio Community 2026 or later with the .NET desktop development workload for interactive WPF development and debugging
-- Autodesk Inventor 2027 Developer Tools from `C:\Users\Public\Documents\Autodesk\Inventor 2027\SDK\developertools.msi` when using Autodesk's Visual Studio templates and SDK samples
+- Visual Studio Community 2022 17.14 with the .NET desktop development workload for Autodesk's Inventor 2027 templates and interactive debugging
+- Autodesk Inventor 2027 Developer Tools 19.0.0 from `C:\Users\Public\Documents\Autodesk\Inventor 2027\SDK\developertools.msi`
+- Visual Studio Community 2026 may coexist, but Autodesk's Inventor 2027 Developer Tools installer does not detect it as a replacement for Visual Studio 2022
 - `gitleaks` 8.30.1 and `git-cliff` 2.14.1 for the full local gauntlet
 
 ## Build and verify
@@ -59,13 +62,44 @@ dotnet build InventorScripts.sln -c Release --no-restore
 dotnet test InventorScripts.sln -c Release --no-build --no-restore
 ```
 
+## Installing for Inventor 2027
+
+Build and install the Debug configuration from PowerShell:
+
+```powershell
+dotnet build InventorScripts.sln -c Debug
+pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/install-addin.ps1 -Configuration Debug
+```
+
+The installer copies the built output to `%APPDATA%\Autodesk\Inventor 2027\Addins\SmartManufacturingExporter` and writes `Autodesk.SmartManufacturingExporter.Inventor.addin` in the parent Addins directory. It does not require machine-wide registration. Close Inventor before replacing an installed build, then start Inventor 2027 and confirm Smart Manufacturing Exporter is loaded in the Add-In Manager.
+
 ## Debugging in Inventor
 
-Phase 1 adds the `ApplicationAddInServer` implementation and `.addin` manifest. Once those exist, configure the AddIn project to start `C:\Program Files\Autodesk\Inventor 2027\Bin\Inventor.exe`, place the manifest in the documented per-user Inventor 2027 Addins directory, build Debug x64, and start debugging from Visual Studio. Exact steps and paths will be verified against the resulting Phase 1 artifact before they are called complete.
+1. Open `InventorScripts.sln` in Visual Studio Community 2022.
+2. Build the Debug x64 configuration and run the install command above.
+3. Set `SmartManufacturingExporter.AddIn` as the startup project.
+4. Configure the startup action to launch `C:\Program Files\Autodesk\Inventor 2027\Bin\Inventor.exe`.
+5. Place breakpoints in the add-in server, command, or Inventor adapter and start debugging.
 
-## Installing and uninstalling
+Inventor API calls and STEP translation remain on Inventor's owning STA thread. The COM-free workflow and view model can be debugged without starting Inventor.
 
-No installable add-in exists at the foundation stage. Phase 1 will produce a per-user package and manifest, plus exact install and clean uninstall steps. Machine-level installation is deferred until there is a demonstrated multi-user requirement because it requires administrator privileges.
+## Uninstalling
+
+Close Inventor, then run:
+
+```powershell
+pwsh -NoProfile -File projects/smart-manufacturing-exporter/scripts/uninstall-addin.ps1
+```
+
+The script validates and removes only this add-in's per-user manifest and binary directory. Machine-level deployment remains outside Phase 1.
+
+## Phase 1 limitations
+
+- Scanning is limited to unique top-level part documents. Recursive subassemblies begin in Phase 2.
+- Existing STEP files are blocking conflicts and are never silently overwritten.
+- STEP translation uses Inventor 2027's installed translator defaults. AP203, AP214, and AP242 option selection begins only after the exact option keys are verified.
+- Browser folders, classifications, smart rules, DXF, PDF, presets, and quick export remain later phases.
+- The live five-part acceptance result is not claimed until the [Phase 1 test plan](docs/PHASE1_TEST_PLAN.md) is executed in Inventor 2027.
 
 ## Development workflow
 

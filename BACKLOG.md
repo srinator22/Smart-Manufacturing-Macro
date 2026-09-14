@@ -5,9 +5,9 @@ Remaining work only. Priorities P0-P3 follow `docs/procedures/audit.md`.
 | Item | Priority | Reason | Status |
 | ---- | -------- | ------ | ------ |
 | Document and register each new Inventor automation under `projects/` | P0 | Preserves independent ownership and full-workspace verification | ongoing |
-| Phase 1 API research and compatibility matrix for Inventor 2027 | P0 | Every host and translator call must be verified before implementation | next |
-| Phase 1 add-in server, ribbon command, active-assembly validation, top-level unique-part scan, checklist, and safe STEP export | P0 | Establishes the first end-to-end testable product slice | open |
-| Phase 1 per-user `.addin` packaging, debug profile, install, and uninstall procedure | P0 | Required to validate the add-in in Inventor 2027 | open |
+| Phase 1 API research and compatibility matrix for Inventor 2027 | P0 | Every host and translator call must be verified before implementation | done |
+| Phase 1 add-in server, ribbon command, active-assembly validation, top-level unique-part scan, checklist, and safe STEP export | P0 | Establishes the first end-to-end testable product slice | done |
+| Phase 1 per-user `.addin` packaging, debug profile, install, and uninstall procedure | P0 | Required to validate the add-in in Inventor 2027 | done |
 | Inventor integration fixture: five unique parts, select three, export exactly three STEP files | P0 | Phase 1 acceptance test from the product specification | open |
 | Phase 2 recursive hierarchy, quantities, unique documents, and tri-state selection | P1 | Core engineering structure workflow | open |
 | Phase 3 Inventor Browser folders and configurable OTS/Fastener exclusions | P1 | Critical organization-aware behavior | open |

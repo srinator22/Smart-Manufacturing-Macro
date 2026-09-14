@@ -5,7 +5,7 @@
       "smartmanufacturingexporter.application": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Core": "[1.0.0, )"
+          "SmartManufacturingExporter.Core": "[0.2.0, )"
         }
       },
       "smartmanufacturingexporter.core": {
