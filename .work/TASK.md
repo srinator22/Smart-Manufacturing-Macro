@@ -27,7 +27,7 @@ Deliver the first testable Smart Manufacturing Exporter slice for Autodesk Inven
 - [x] Export planning is side-effect free, rejects missing/unwritable destinations and existing output conflicts before translation, and never saves or changes source documents. -> unit tests
 - [x] The Inventor adapter resolves the installed STEP translator `{90AF7F40-0C01-11D5-8E83-0010B541CD80}` and uses `TranslatorAddIn.SaveCopyAs` for selected part documents only. -> adapter contract tests where COM-free plus installed API evidence
 - [x] A per-user Inventor 2027 `.addin` manifest and reversible install/uninstall scripts are documented and validated without requiring machine-wide deployment. -> script tests or dry-run validation plus documentation inspection
-- [ ] The complete solution restores locked, builds with zero warnings, passes all tests and architecture gates, and passes `scripts/check.sh`. -> `scripts/check.sh`
+- [x] The complete solution restores locked, builds with zero warnings, passes all tests and architecture gates, and passes `scripts/check.sh`. -> `scripts/check.sh`
 - [x] Interactive acceptance steps document the five-unique-part, select-three, exactly-three-STEP scenario and leave its result unclaimed until run in Inventor 2027. -> documentation inspection
 - [x] The future idea log records the three supplied Inventor 2027 product concepts, first milestones, major risks, and likely reuse without scaffolding speculative projects. -> `IDEAS.md`
 
@@ -47,6 +47,7 @@ Deliver the first testable Smart Manufacturing Exporter slice for Autodesk Inven
 - 2026-09-14T00:42Z - Logged Smart Render Pack, Part Number & Filename Manager, and 3D Print Production Manager as future ideas with bounded first milestones and reuse gates.
 - 2026-09-14T10:27Z - Rendered and inspected the WPF checklist, repaired collapsed file/source columns, and passed the canonical gate: 29 unit plus 3 architecture tests, packaging, secret scans, zero-warning builds, and 100.00% mutation score.
 - 2026-09-14T10:44Z - Independent review found and the implementation repaired effective directory permission detection, atomic non-overwriting STEP finalization, and activation-manifest version drift; reviewer verdict is PASS.
+- 2026-09-14T10:46Z - Versioned the Phase 1 feature wave as 0.2.0 and passed the final canonical gate: 31 unit plus 4 architecture tests, packaging, secret scans, zero-warning Debug and Release builds, changelog freshness, and 100.00% mutation score.
 
 ## Review verdict
 
