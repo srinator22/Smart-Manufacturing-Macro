@@ -10,6 +10,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 
 ### Changed
 - Enforce plugin operator guides
+- Archive plugin readme task
 
 ### Fixed
 - Guard post-release changelog generation
