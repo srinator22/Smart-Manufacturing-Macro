@@ -1,8 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <InventorInteropPath Condition="'$(InventorInteropPath)' == ''">$(ProgramFiles)\Autodesk\Inventor 2027\Bin\Public Assemblies\Autodesk.Inventor.Interop.dll</InventorInteropPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(InventorInteropPath)')">
+    <DefineConstants>$(DefineConstants);INVENTOR_INTEROP</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\SmartManufacturingExporter.Application\SmartManufacturingExporter.Application.csproj" />
     <ProjectReference Include="..\SmartManufacturingExporter.Core\SmartManufacturingExporter.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(InventorInteropPath)')">
+    <Reference Include="Autodesk.Inventor.Interop">
+      <HintPath>$(InventorInteropPath)</HintPath>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <PropertyGroup>

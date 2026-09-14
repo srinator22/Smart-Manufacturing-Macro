@@ -4,11 +4,13 @@ Inventor Scripts is a Windows workspace for building and maintaining independent
 
 The workspace currently targets Autodesk Inventor 2027 only. Support for another Inventor release requires its own compatibility evidence and architecture decision.
 
+Future product concepts are recorded in [IDEAS.md](IDEAS.md). Logged ideas are not active projects and do not receive code or shared abstractions until they are promoted through a scoped task.
+
 ## Project catalog
 
 | Project | Kind | Status |
 | --- | --- | --- |
-| [Smart Manufacturing Exporter](projects/smart-manufacturing-exporter/README.md) | C#/.NET WPF add-in | Foundation complete; Phase 1 behavior next |
+| [Smart Manufacturing Exporter](projects/smart-manufacturing-exporter/README.md) | C#/.NET WPF add-in | Phase 1 MVP implemented; live Inventor acceptance pending |
 
 ## Workspace layout
 
@@ -32,8 +34,9 @@ Each project owns its product requirements and host integration details. Shared 
 - Windows 11 x64
 - Autodesk Inventor 2027
 - .NET SDK 10.0.401, pinned by `global.json`
-- Visual Studio Community 2026 or later with .NET desktop development for interactive WPF debugging
-- Autodesk Inventor 2027 Developer Tools for Inventor templates and SDK samples
+- Visual Studio Community 2022 17.14 with .NET desktop development for Autodesk's Inventor 2027 Developer Tools and interactive debugging
+- Autodesk Inventor 2027 Developer Tools 19.0.0 for the matching add-in templates
+- Visual Studio Community 2026 may remain installed side-by-side, but the Inventor 2027 Developer Tools installer does not detect it as a substitute for Visual Studio 2022
 - `gitleaks` 8.30.1 and `git-cliff` 2.14.1 for the full local check
 
 ## Build and verify everything

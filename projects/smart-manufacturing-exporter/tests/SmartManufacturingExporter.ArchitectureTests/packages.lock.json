@@ -102,16 +102,16 @@
       "smartmanufacturingexporter.addin": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[1.0.0, )",
-          "SmartManufacturingExporter.Infrastructure": "[1.0.0, )",
-          "SmartManufacturingExporter.InventorAdapter": "[1.0.0, )",
-          "SmartManufacturingExporter.UI": "[1.0.0, )"
+          "SmartManufacturingExporter.Application": "[0.2.0, )",
+          "SmartManufacturingExporter.Infrastructure": "[0.2.0, )",
+          "SmartManufacturingExporter.InventorAdapter": "[0.2.0, )",
+          "SmartManufacturingExporter.UI": "[0.2.0, )"
         }
       },
       "smartmanufacturingexporter.application": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Core": "[1.0.0, )"
+          "SmartManufacturingExporter.Core": "[0.2.0, )"
         }
       },
       "smartmanufacturingexporter.core": {
@@ -120,22 +120,22 @@
       "smartmanufacturingexporter.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[1.0.0, )",
-          "SmartManufacturingExporter.Core": "[1.0.0, )"
+          "SmartManufacturingExporter.Application": "[0.2.0, )",
+          "SmartManufacturingExporter.Core": "[0.2.0, )"
         }
       },
       "smartmanufacturingexporter.inventoradapter": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[1.0.0, )",
-          "SmartManufacturingExporter.Core": "[1.0.0, )"
+          "SmartManufacturingExporter.Application": "[0.2.0, )",
+          "SmartManufacturingExporter.Core": "[0.2.0, )"
         }
       },
       "smartmanufacturingexporter.ui": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[1.0.0, )",
-          "SmartManufacturingExporter.Core": "[1.0.0, )"
+          "SmartManufacturingExporter.Application": "[0.2.0, )",
+          "SmartManufacturingExporter.Core": "[0.2.0, )"
         }
       }
     }

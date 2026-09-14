@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Addin Type="Standard">
+  <ClassId>{A77D6A17-82A7-45C9-93C6-E6FA4EB91E73}</ClassId>
+  <ClientId>{A77D6A17-82A7-45C9-93C6-E6FA4EB91E73}</ClientId>
+  <DisplayName>Smart Manufacturing Exporter</DisplayName>
+  <Description>Review and export selected manufacturing parts from an Inventor assembly.</Description>
+  <Assembly>__ASSEMBLY_PATH__</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionEqualTo>31..</SupportedSoftwareVersionEqualTo>
+  <DataVersion>1</DataVersion>
+  <UserInterfaceVersion>1</UserInterfaceVersion>
+</Addin>
