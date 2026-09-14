@@ -61,9 +61,27 @@ dotnet build InventorScripts.sln -c Release --no-restore
 dotnet test InventorScripts.sln -c Release --no-build --no-restore
 ```
 
+## Project README contract
+
+Every folder directly under `projects/` owns a present-tense operator README. It must let a new user install, verify, use, update, troubleshoot, and remove that project without reading source code. The repository gate requires these exact sections:
+
+- `## What it does`
+- `## Requirements`
+- `## Install`
+- `## Verify installation`
+- `## Use`
+- `## Update`
+- `## Uninstall`
+- `## Troubleshooting`
+- `## Versioning and changelog`
+- `## Known limitations`
+- `## Development and verification`
+
+The workspace currently uses one semantic version from `Directory.Build.props` and one generated [CHANGELOG.md](CHANGELOG.md). Each project README states the workspace version it documents and links to that changelog. Independent plugin versions or changelogs require an architecture decision when separate release schedules become necessary.
+
 ## Adding another Inventor project
 
-1. Create `projects/<kebab-case-name>/` with its own README, docs, source, and tests.
+1. Create `projects/<kebab-case-name>/` with its own operator README, docs, source, and tests.
 2. Record its Inventor host version and safety boundary before implementation.
 3. Add every .NET project to `InventorScripts.sln`, grouped below that product's solution folder.
 4. Keep Autodesk COM references at the host adapter edge and keep domain logic COM-free.
