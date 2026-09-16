@@ -102,7 +102,7 @@
       "smartmanufacturingexporter.application": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Core": "[0.2.1, )"
+          "SmartManufacturingExporter.Core": "[0.3.0, )"
         }
       },
       "smartmanufacturingexporter.core": {
@@ -111,15 +111,15 @@
       "smartmanufacturingexporter.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[0.2.1, )",
-          "SmartManufacturingExporter.Core": "[0.2.1, )"
+          "SmartManufacturingExporter.Application": "[0.3.0, )",
+          "SmartManufacturingExporter.Core": "[0.3.0, )"
         }
       },
       "smartmanufacturingexporter.ui": {
         "type": "Project",
         "dependencies": {
-          "SmartManufacturingExporter.Application": "[0.2.1, )",
-          "SmartManufacturingExporter.Core": "[0.2.1, )"
+          "SmartManufacturingExporter.Application": "[0.3.0, )",
+          "SmartManufacturingExporter.Core": "[0.3.0, )"
         }
       }
     }

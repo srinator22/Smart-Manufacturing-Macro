@@ -39,6 +39,7 @@ live-host behavior.
 | Add-in lookup | `ApplicationAddIns.ItemById(string)` | Installed interop XML and interop assembly metadata |
 | Translation context | `TransientObjects.CreateTranslationContext()` | Installed interop XML and interop assembly metadata |
 | Translation options | `TransientObjects.CreateNameValueMap()` | Installed interop XML and interop assembly metadata |
+| STEP spline-fit tolerance | `export_fit_tolerance` is a `Double` in centimeters with a documented range of `0.00001` to `0.001`; the documented default is `0.001`. | [Autodesk Inventor Translator Settings](https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-API/files/TranslatorSettings.htm) |
 | Translation target | `TransientObjects.CreateDataMedium()` | Installed interop XML and interop assembly metadata |
 
 ## Phase 1 boundary
@@ -47,13 +48,15 @@ live-host behavior.
 - The implementation does not use indiscriminate `Marshal.ReleaseComObject` calls.
 - Export planning does not call source `Save`, `SaveAs`, or `Update`.
 - The exporter uses the installed STEP translator identity above and its `SaveCopyAs` contract for selected part documents only.
+- Low, Medium, and Highest map to `export_fit_tolerance` values `0.001`, `0.0001`, and `0.00001` centimeters respectively. Lower values increase spline approximation accuracy and can increase file size.
 
 ## Deferred live-host verification
 
 The following items are deliberately unverified by installed assemblies and
 manifests. They remain deferred until exercised in a live Inventor 2027 host.
 
-- Exact STEP option keys and AP242 option mapping.
+- Live acceptance of the Low, Medium, and Highest `export_fit_tolerance` values in Inventor 2027.
+- AP242 option mapping.
 - Interactive ribbon internal IDs and persistence behavior.
 - Source close and open behavior in a live host.
 - The final five-part acceptance scenario, including selection of three unique parts and production of exactly three STEP files.

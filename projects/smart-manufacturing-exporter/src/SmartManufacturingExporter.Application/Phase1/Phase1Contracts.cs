@@ -1,5 +1,5 @@
 // Purpose: Define the Phase 1 application ports and active-assembly session boundary.
-// Inputs: COM-free occurrence snapshots, filesystem queries, and explicit STEP source/output paths.
+// Inputs: COM-free occurrence snapshots, filesystem queries, and explicit STEP source/output settings.
 // Outputs: A validated start session and adapter operations required by SmartExportWorkflow.
 // Dependencies: Core Phase 1 models only.
 // Assumptions: Host adapters invoke these contracts synchronously on their owning thread.
@@ -17,7 +17,10 @@ public interface IInventorPhase1Gateway
 {
     ActiveAssemblyScan? ScanActiveAssembly();
 
-    void ExportPartAsStep(string sourcePath, string outputPath);
+    void ExportPartAsStep(
+        string sourcePath,
+        string outputPath,
+        StepExportPrecision precision);
 }
 
 public interface IPhase1FileSystem

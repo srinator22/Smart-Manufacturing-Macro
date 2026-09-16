@@ -15,9 +15,18 @@ namespace SmartManufacturingExporter.UI.Phase1;
 
 public sealed class SmartExportViewModel : INotifyPropertyChanged
 {
+    private static readonly IReadOnlyList<StepExportPrecision> PrecisionOptions =
+        Array.AsReadOnly(
+        [
+            StepExportPrecision.Low,
+            StepExportPrecision.Medium,
+            StepExportPrecision.Highest,
+        ]);
+
     private readonly SmartExportWorkflow workflow;
     private readonly Phase1StartResult session;
     private string destinationDirectory = string.Empty;
+    private StepExportPrecision selectedStepPrecision = StepExportPrecision.Low;
     private string statusMessage = "Choose a destination, review the selected parts, then export.";
 
     public SmartExportViewModel(SmartExportWorkflow workflow, Phase1StartResult session)
@@ -44,6 +53,32 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
     public string RootAssemblyPath { get; }
 
     public ObservableCollection<SmartExportRowViewModel> Rows { get; }
+
+    public IReadOnlyList<StepExportPrecision> StepPrecisionOptions { get; } = PrecisionOptions;
+
+    public StepExportPrecision SelectedStepPrecision
+    {
+        get => selectedStepPrecision;
+        set
+        {
+            if (selectedStepPrecision == value)
+            {
+                return;
+            }
+
+            selectedStepPrecision = value;
+            OnPropertyChanged(nameof(SelectedStepPrecision));
+            OnPropertyChanged(nameof(StepPrecisionDescription));
+        }
+    }
+
+    public string StepPrecisionDescription => SelectedStepPrecision switch
+    {
+        StepExportPrecision.Low => "Uses Inventor's standard spline-fit accuracy and smallest expected file size.",
+        StepExportPrecision.Medium => "Uses finer spline-fit accuracy and can increase file size.",
+        StepExportPrecision.Highest => "Uses the finest spline-fit accuracy and can produce the largest files.",
+        _ => throw new InvalidOperationException($"Unsupported STEP precision: {SelectedStepPrecision}."),
+    };
 
     public string DestinationDirectory
     {
@@ -98,7 +133,11 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
     public void ExportSelected()
     {
         string[] selectedPaths = Rows.Where(row => row.IsSelected).Select(row => row.SourcePath).ToArray();
-        StepExportPlan plan = workflow.BuildStepPlan(session, selectedPaths, DestinationDirectory);
+        StepExportPlan plan = workflow.BuildStepPlan(
+            session,
+            selectedPaths,
+            DestinationDirectory,
+            SelectedStepPrecision);
         ValidationIssue[] errors = plan.Issues
             .Where(issue => issue.Severity == ValidationSeverity.Error)
             .ToArray();

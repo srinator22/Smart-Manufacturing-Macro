@@ -33,11 +33,48 @@ public enum ValidationSeverity
 
 public sealed record ValidationIssue(string Code, string Message, ValidationSeverity Severity);
 
+/// <summary>
+/// Selects the STEP translator spline-fit tolerance. Lower tolerance values produce more accurate
+/// approximations and can increase file size.
+/// </summary>
+public enum StepExportPrecision
+{
+    Low,
+    Medium,
+    Highest,
+}
+
+public static class StepExportPrecisionExtensions
+{
+    /// <summary>
+    /// Returns Inventor's <c>export_fit_tolerance</c> value in centimeters.
+    /// </summary>
+    /// <remarks>
+    /// Autodesk's
+    /// <see href="https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-API/files/TranslatorSettings.htm">
+    /// Inventor Translator Settings reference</see> documents a range of 0.00001 cm to 0.001 cm
+    /// and identifies 0.001 cm as the default. Medium is the decade step between the documented
+    /// endpoints.
+    /// </remarks>
+    public static double GetFitToleranceCentimeters(this StepExportPrecision precision) =>
+        precision switch
+        {
+            StepExportPrecision.Low => 0.001,
+            StepExportPrecision.Medium => 0.0001,
+            StepExportPrecision.Highest => 0.00001,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(precision),
+                precision,
+                "The STEP export precision must be Low, Medium, or Highest."),
+        };
+}
+
 public sealed record StepExportPlanItem(string SourcePath, string OutputPath);
 
 public sealed record StepExportPlan(
     IReadOnlyList<StepExportPlanItem> Items,
-    IReadOnlyList<ValidationIssue> Issues)
+    IReadOnlyList<ValidationIssue> Issues,
+    StepExportPrecision Precision)
 {
     public bool CanExecute => Issues.All(issue => issue.Severity != ValidationSeverity.Error);
 }

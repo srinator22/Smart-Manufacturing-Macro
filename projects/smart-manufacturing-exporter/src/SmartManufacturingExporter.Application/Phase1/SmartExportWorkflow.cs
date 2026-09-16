@@ -81,12 +81,14 @@ public sealed class SmartExportWorkflow
     public StepExportPlan BuildStepPlan(
         Phase1StartResult session,
         IEnumerable<string> selectedSourcePaths,
-        string destinationDirectory)
+        string destinationDirectory,
+        StepExportPrecision precision)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selectedSourcePaths);
 
         List<ValidationIssue> issues = [];
+        ValidateStepPrecision(precision, issues);
         ValidateDestination(destinationDirectory, issues);
 
         Dictionary<string, ExportCandidate> candidatesByPath = session.Candidates.ToDictionary(
@@ -150,7 +152,7 @@ public sealed class SmartExportWorkflow
             }
         }
 
-        return new(items, issues);
+        return new(items, issues, precision);
     }
 
     public StepExportBatchResult ExecuteStepPlan(StepExportPlan plan)
@@ -176,7 +178,7 @@ public sealed class SmartExportWorkflow
                     continue;
                 }
 
-                gateway.ExportPartAsStep(item.SourcePath, item.OutputPath);
+                gateway.ExportPartAsStep(item.SourcePath, item.OutputPath, plan.Precision);
                 results.Add(new(item.SourcePath, item.OutputPath, true, null));
             }
             catch (Exception exception)
@@ -213,6 +215,19 @@ public sealed class SmartExportWorkflow
             issues.Add(new(
                 "DestinationNotWritable",
                 $"The output destination is not writable: '{destinationDirectory}'. Choose a folder with write access.",
+                ValidationSeverity.Error));
+        }
+    }
+
+    private static void ValidateStepPrecision(
+        StepExportPrecision precision,
+        List<ValidationIssue> issues)
+    {
+        if (!Enum.IsDefined(precision))
+        {
+            issues.Add(new(
+                "UnsupportedStepPrecision",
+                $"The STEP export precision '{precision}' is unsupported. Choose Low, Medium, or Highest.",
                 ValidationSeverity.Error));
         }
     }

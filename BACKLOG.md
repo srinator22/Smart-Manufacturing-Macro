@@ -6,6 +6,7 @@ Remaining work only. Priorities P0-P3 follow `docs/procedures/audit.md`.
 | ---- | -------- | ------ | ------ |
 | Document and register each new Inventor automation under `projects/` | P0 | Preserves independent ownership and full-workspace verification | ongoing |
 | Inventor integration fixture: five unique parts, select three, export exactly three STEP files | P0 | Phase 1 acceptance test from the product specification | open |
+| STEP precision live acceptance: export a spline-bearing part with Low and Highest and compare import fidelity, time, and file size | P0 | Confirms Inventor 2027 honors the documented translator tolerance before release claims | open |
 | Phase 2 recursive hierarchy, quantities, unique documents, and tri-state selection | P1 | Core engineering structure workflow | open |
 | Phase 3 Inventor Browser folders and configurable OTS/Fastener exclusions | P1 | Critical organization-aware behavior | open |
 | Phase 4 persistent classifications and Do Not Traverse purchased assemblies | P1 | Performance and export-scope safety | open |
