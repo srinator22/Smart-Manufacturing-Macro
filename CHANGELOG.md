@@ -17,6 +17,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 
 ### Fixed
 - Guard post-release changelog generation
+- Align retro defect memory
 ## [0.1.0] - 2026-09-13
 
 ### Added
