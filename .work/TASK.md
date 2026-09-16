@@ -38,11 +38,12 @@ Deliver the Phase 2 Smart Manufacturing Exporter slice: recursive assembly disco
 - 2026-09-17T08:25Z - Repaired reviewer-identified regression assertions. Independent Sol review passed; full local gate passed with 50 tests and an 80.00% mutation score. Live rendered inspection and delivery remain.
 - 2026-09-17T08:31Z - GitHub review caught mixed-scope assembly omission before merge. Added a failing regression test, then separated each node's own document selection from its aggregate tri-state value; targeted regression passes.
 - 2026-09-17T08:40Z - GitHub re-review caught quadratic `CanExport` reevaluation for parent selection. Added a failing notification-count regression and changed recursive selection to emit one completion notification per user action; focused regressions pass.
+- 2026-09-17T08:48Z - Final GitHub re-review identified intermediate ancestor aggregation still scaling quadratically for wide trees. Suppressed refresh while a parent batch is active and retained the single final recomputation.
 
 ## Review verdict
 PASS
 
-- Recursive propagation now invokes one shared completion callback only after the externally requested tree change finishes, so `CanExport` is reevaluated once instead of once per changed node. Internal child updates and ancestor tri-state recomputation remain callback-free, mixed-scope document selection remains correct, and scope rebuild notifications are preserved. The two focused regressions pass; no new correctness, boundary, dependency, or test-coverage issue was found.
+- Parent batches now suppress intermediate aggregation and publish one final `IsSelected` state before propagating once to ancestors. The regression directly observes both the parent notification and the shared `CanExport` notification, and fails if the batching guard is removed. The targeted test passes; mixed-scope selection semantics and the prior notification batching remain intact.
 
 ## Retro
 <!-- filled by docs/procedures/retro.md -->

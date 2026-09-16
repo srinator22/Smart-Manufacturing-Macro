@@ -108,6 +108,8 @@ public sealed class SmartExportViewModelTests
     {
         Fixture fixture = CreateFixture();
         int canExportNotifications = 0;
+        int parentSelectionNotifications = 0;
+        SmartExportTreeNodeViewModel subassembly = FindNode(fixture.ViewModel, "SubA:1");
         fixture.ViewModel.PropertyChanged += (_, eventArgs) =>
         {
             if (eventArgs.PropertyName == nameof(SmartExportViewModel.CanExport))
@@ -115,10 +117,18 @@ public sealed class SmartExportViewModelTests
                 canExportNotifications++;
             }
         };
+        subassembly.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.PropertyName == nameof(SmartExportTreeNodeViewModel.IsSelected))
+            {
+                parentSelectionNotifications++;
+            }
+        };
 
-        FindNode(fixture.ViewModel, "SubA:1").IsSelected = false;
+        subassembly.IsSelected = false;
 
         Assert.Equal(1, canExportNotifications);
+        Assert.Equal(1, parentSelectionNotifications);
     }
 
     [Fact]

@@ -153,6 +153,11 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
 
     private void RefreshSelection()
     {
+        if (isApplyingSelection)
+        {
+            return;
+        }
+
         bool? next = CalculateSelection();
         if (selection != next)
         {
@@ -160,10 +165,7 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsSelected));
         }
 
-        if (!isApplyingSelection)
-        {
-            parent?.RefreshSelection();
-        }
+        parent?.RefreshSelection();
     }
 
     private bool? CalculateSelection()
