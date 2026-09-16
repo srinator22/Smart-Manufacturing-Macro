@@ -8,6 +8,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 ### Added
 - Add safe phase 1 STEP workflow
 - Add STEP precision and visual identity
+- Add recursive assembly hierarchy
 
 ### Changed
 - Enforce plugin operator guides
