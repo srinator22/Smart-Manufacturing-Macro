@@ -21,6 +21,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Align retro defect memory
 - Preserve mixed-scope assemblies
 - Batch tree selection updates
+- Defer hierarchy aggregation
 ## [0.1.0] - 2026-09-13
 
 ### Added
