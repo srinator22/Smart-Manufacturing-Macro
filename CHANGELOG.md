@@ -20,6 +20,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Guard post-release changelog generation
 - Align retro defect memory
 - Preserve mixed-scope assemblies
+- Batch tree selection updates
 ## [0.1.0] - 2026-09-13
 
 ### Added
