@@ -110,12 +110,17 @@ public sealed class SmartExportWorkflowTests
         SmartExportWorkflow workflow = CreateWorkflow(gateway);
         Phase1StartResult session = workflow.Start();
 
-        StepExportPlan plan = workflow.BuildStepPlan(session, [@"c:\models\BETA.ipt"], Destination);
+        StepExportPlan plan = workflow.BuildStepPlan(
+            session,
+            [@"c:\models\BETA.ipt"],
+            Destination,
+            StepExportPrecision.Medium);
 
         Assert.True(plan.CanExecute);
         StepExportPlanItem item = Assert.Single(plan.Items);
         Assert.Equal(@"C:\Models\Beta.ipt", item.SourcePath);
         Assert.Equal(@"C:\Exports\Beta.step", item.OutputPath);
+        Assert.Equal(StepExportPrecision.Medium, plan.Precision);
         Assert.Empty(gateway.ExportCalls);
     }
 
@@ -127,7 +132,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture();
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [fixture.SourcePath], destination!);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [fixture.SourcePath],
+            destination!,
+            StepExportPrecision.Low);
 
         AssertError(plan, "DestinationRequired");
     }
@@ -137,7 +146,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture(directoryExists: false);
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [fixture.SourcePath], Destination);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [fixture.SourcePath],
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "DestinationNotFound");
     }
@@ -147,7 +160,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture(canWrite: false);
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [fixture.SourcePath], Destination);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [fixture.SourcePath],
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "DestinationNotWritable");
     }
@@ -157,7 +174,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture(existingFiles: [@"C:\Exports\Part.step"]);
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [fixture.SourcePath], Destination);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [fixture.SourcePath],
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "OutputExists");
         Assert.Contains(@"C:\Exports\Part.step", plan.Issues[0].Message, StringComparison.Ordinal);
@@ -175,7 +196,8 @@ public sealed class SmartExportWorkflowTests
         StepExportPlan plan = workflow.BuildStepPlan(
             session,
             [@"C:\A\Bracket.ipt", @"C:\B\BRACKET.ipt"],
-            Destination);
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "OutputCollision");
     }
@@ -185,7 +207,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture();
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [@"C:\Models\Unknown.ipt"], Destination);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [@"C:\Models\Unknown.ipt"],
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "UnknownSelection");
         Assert.Contains(@"C:\Models\Unknown.ipt", plan.Issues[0].Message, StringComparison.Ordinal);
@@ -196,7 +222,11 @@ public sealed class SmartExportWorkflowTests
     {
         Fixture fixture = ValidFixture();
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(fixture.Session, [], Destination);
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [],
+            Destination,
+            StepExportPrecision.Low);
 
         AssertError(plan, "NoSelection");
     }
@@ -207,7 +237,8 @@ public sealed class SmartExportWorkflowTests
         Fixture fixture = ValidFixture();
         StepExportPlan invalidPlan = new(
             [],
-            [new ValidationIssue("Unsafe", "Unsafe plan.", ValidationSeverity.Error)]);
+            [new ValidationIssue("Unsafe", "Unsafe plan.", ValidationSeverity.Error)],
+            StepExportPrecision.Low);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
             () => fixture.Workflow.ExecuteStepPlan(invalidPlan));
@@ -227,7 +258,8 @@ public sealed class SmartExportWorkflowTests
                 new StepExportPlanItem(@"C:\Models\Bad.ipt", @"C:\Exports\Bad.step"),
                 new StepExportPlanItem(@"C:\Models\Good.ipt", @"C:\Exports\Good.step"),
             ],
-            []);
+            [],
+            StepExportPrecision.Highest);
 
         StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
 
@@ -240,8 +272,8 @@ public sealed class SmartExportWorkflowTests
         Assert.Null(result.Items[1].ErrorMessage);
         Assert.Equal(
             [
-                (@"C:\Models\Bad.ipt", @"C:\Exports\Bad.step"),
-                (@"C:\Models\Good.ipt", @"C:\Exports\Good.step"),
+                (@"C:\Models\Bad.ipt", @"C:\Exports\Bad.step", StepExportPrecision.Highest),
+                (@"C:\Models\Good.ipt", @"C:\Exports\Good.step", StepExportPrecision.Highest),
             ],
             gateway.ExportCalls);
     }
@@ -258,7 +290,8 @@ public sealed class SmartExportWorkflowTests
         StepExportPlan plan = workflow.BuildStepPlan(
             session,
             [@"C:\Models\Alpha.ipt", @"C:\Models\Beta.ipt"],
-            Destination);
+            Destination,
+            StepExportPrecision.Medium);
         Assert.True(plan.CanExecute);
         fileSystem.ExistingFiles.Add(@"C:\Exports\Alpha.step");
 
@@ -271,8 +304,52 @@ public sealed class SmartExportWorkflowTests
         Assert.Contains("already exists", result.Items[0].ErrorMessage, StringComparison.OrdinalIgnoreCase);
         Assert.True(result.Items[1].Succeeded);
         Assert.Equal(
-            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step")],
+            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Medium)],
             gateway.ExportCalls);
+    }
+
+    [Fact]
+    public void ExecuteStepPlanPassesPrecisionToEverySelectedExportOnly()
+    {
+        FakeGateway gateway = WithOccurrences(
+            Part("A", @"C:\Models\Alpha.ipt"),
+            Part("B", @"C:\Models\Beta.ipt"),
+            Part("C", @"C:\Models\Gamma.ipt"));
+        SmartExportWorkflow workflow = CreateWorkflow(gateway);
+        Phase1StartResult session = workflow.Start();
+        StepExportPlan plan = workflow.BuildStepPlan(
+            session,
+            [@"C:\Models\Alpha.ipt", @"C:\Models\Gamma.ipt"],
+            Destination,
+            StepExportPrecision.Highest);
+
+        StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
+
+        Assert.Equal(2, result.SucceededCount);
+        Assert.Equal(
+            [
+                (@"C:\Models\Alpha.ipt", @"C:\Exports\Alpha.step", StepExportPrecision.Highest),
+                (@"C:\Models\Gamma.ipt", @"C:\Exports\Gamma.step", StepExportPrecision.Highest),
+            ],
+            gateway.ExportCalls);
+        Assert.DoesNotContain(
+            gateway.ExportCalls,
+            call => string.Equals(call.SourcePath, @"C:\Models\Beta.ipt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BuildStepPlanRejectsUnsupportedPrecisionWithoutExporting()
+    {
+        Fixture fixture = ValidFixture();
+
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            [fixture.SourcePath],
+            Destination,
+            (StepExportPrecision)99);
+
+        AssertError(plan, "UnsupportedStepPrecision");
+        Assert.Empty(fixture.Gateway.ExportCalls);
     }
 
     private static TopLevelOccurrenceSnapshot Part(string occurrenceName, string sourcePath) =>
@@ -319,7 +396,7 @@ public sealed class SmartExportWorkflowTests
 
         public int ScanCalls { get; private set; }
 
-        public List<(string SourcePath, string OutputPath)> ExportCalls { get; } = [];
+        public List<(string SourcePath, string OutputPath, StepExportPrecision Precision)> ExportCalls { get; } = [];
 
         public Dictionary<string, Exception> ExportFailureBySource { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -329,9 +406,12 @@ public sealed class SmartExportWorkflowTests
             return Scan;
         }
 
-        public void ExportPartAsStep(string sourcePath, string outputPath)
+        public void ExportPartAsStep(
+            string sourcePath,
+            string outputPath,
+            StepExportPrecision precision)
         {
-            ExportCalls.Add((sourcePath, outputPath));
+            ExportCalls.Add((sourcePath, outputPath, precision));
             if (ExportFailureBySource.TryGetValue(sourcePath, out Exception? exception))
             {
                 throw exception;

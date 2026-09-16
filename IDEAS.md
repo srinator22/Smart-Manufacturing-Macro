@@ -9,6 +9,7 @@ This log preserves future Autodesk Inventor 2027 product ideas without turning t
 | IDEA-001 | Smart Render Pack | Logged | Headless Blender proof | STEP transfer, component identity, naming, job progress |
 | IDEA-002 | Part Number & Filename Manager | Logged | Read-only part-number auditor | Component identity, metadata, conflict validation |
 | IDEA-003 | 3D Print Production Manager | Logged | Read-only print dashboard | Assembly scanning, quantities, identity, STEP freshness |
+| IDEA-004 | SolidWorks Bridge | Logged | Assembly hierarchy and transform proof | Recursive scanning, component identity, metadata, geometry export, validation |
 
 ## IDEA-001 - Smart Render Pack
 
@@ -108,12 +109,49 @@ Build a read-only dashboard for one active assembly. Identify manually classifie
 - Smart Manufacturing Exporter's assembly scanning, unique-document model, selection, validation, and STEP freshness/export services.
 - Part Number & Filename Manager component identity and metadata.
 
+## IDEA-004 - SolidWorks Bridge
+
+### Product goal
+
+Transfer Inventor assemblies into SolidWorks as useful native projects while preserving as much engineering structure and design intent as can be validated. The product is a semantic Inventor-to-SolidWorks bridge, not another neutral-geometry exporter and not a promise of perfect one-to-one CAD translation.
+
+### Core experience
+
+- Analyse an active Inventor assembly and classify each translated concept as Exact, Equivalent, Approximate, Review Required, or Unsupported.
+- Create a versioned, self-contained Bridge Package containing a validated manifest, component identity, hierarchy, occurrence transforms, selected properties, source or fallback geometry, and deterministic reports.
+- Import the package through a cooperating SolidWorks add-in that uses supported SolidWorks APIs to create native parts, subassemblies, and the final assembly.
+- Preserve source-file reuse separately from occurrence identity, reconstruct positions from source transforms, and add native mates only when geometry matching and post-rebuild validation are trustworthy.
+- Preserve Browser or FeatureManager organisation, grounded or fixed state, suppression, Part Numbers, descriptions, revisions, and custom properties in later verified phases.
+- Present progress, cancellation, retry, compatibility summaries, and a focused review queue rather than hiding partial or unsupported translations.
+
+### Suggested first milestone
+
+Prove one small sanitized assembly can be scanned in Inventor, written to a versioned manifest with stable document and occurrence identities, transferred through a verified geometry path, and reconstructed by SolidWorks as native parts, subassemblies, and one `.SLDASM` with matching hierarchy and occurrence transforms. Do not translate constraints or mates in this milestone. Acceptance requires a visual match plus bounded comparisons of component counts, hierarchy, transforms, and geometry properties.
+
+### Important boundaries and risks
+
+- The two CAD hosts require separate add-ins and adapters; shared models must remain COM-free and must not expose Inventor or SolidWorks objects.
+- SolidWorks native Inventor import, 3D Interconnect, Parasolid, and STEP behavior must be tested manually against pinned supported versions before choosing a transfer strategy.
+- Source Inventor projects are read-only inputs. Existing SolidWorks projects are never silently overwritten, and incomplete imports are clearly marked.
+- Bridge Packages are untrusted input. Schema validation, path normalization, traversal prevention, bounded extraction, and destination containment are required before import.
+- Stable document, occurrence, and geometry-reference identity is the central design risk; filenames or raw transient COM identifiers are insufficient.
+- Mate translation is confidence-gated and validated against expected occurrence transforms. A questionable mate stays suppressed or omitted and enters Review Required rather than moving geometry silently.
+- Manifest schemas, geometry descriptors, mapping policies, and translation reports require explicit versions and compatibility checks.
+- Advanced model states, design views, patterns, joints, drawings, iLogic, CAM, FEA, Vault, PLM, reverse translation, and incremental updates remain outside the first release.
+
+### Reuse candidates
+
+- Smart Manufacturing Exporter's recursive assembly scanning, safe geometry export, progress, cancellation, and validation contracts after those capabilities are implemented and proven.
+- Part Number & Filename Manager identity, metadata, and naming contracts after it becomes a real second consumer.
+- Browser-folder, classification, quantity, and source-document models only after two products demonstrate the same stable requirements.
+
 ## Suggested sequencing
 
 1. Complete and validate the Smart Manufacturing Exporter foundation now in progress.
 2. Promote the Part Number & Filename Manager read-only auditor because stable identity benefits both remaining ideas.
 3. Promote the 3D Print Production Manager read-only dashboard after recursive scanning and quantity behavior are proven.
 4. Run the Smart Render headless Blender proof independently before coupling an external runtime to Inventor.
+5. Promote the SolidWorks Bridge hierarchy proof only after recursive scanning and stable component identity exist, and after manual SolidWorks native, Parasolid, and STEP import experiments identify a defensible geometry path.
 
 Shared code moves into `shared/` only after two implemented products use the same stable contract. Similar planned features alone do not justify a shared abstraction.
 

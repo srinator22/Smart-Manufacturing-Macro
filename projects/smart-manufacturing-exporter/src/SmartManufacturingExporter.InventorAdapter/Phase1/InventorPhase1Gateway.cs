@@ -1,5 +1,5 @@
 // Purpose: Translate Inventor 2027 assembly and STEP translator state into the Phase 1 application ports.
-// Inputs: The live Inventor application, active top-level occurrences, and explicit part/output paths.
+// Inputs: The live Inventor application, active top-level occurrences, and explicit STEP export settings.
 // Outputs: COM-free scan snapshots and STEP files created by Inventor's installed translator.
 // Dependencies: Inventor 2027 interop v31, conditionally compiled when its installed assembly exists.
 // Assumptions: Every call occurs synchronously on Inventor's owning STA thread.
@@ -84,9 +84,13 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
         return new(assembly.FullFileName, snapshots);
     }
 
-    public void ExportPartAsStep(string sourcePath, string outputPath)
+    public void ExportPartAsStep(
+        string sourcePath,
+        string outputPath,
+        StepExportPrecision precision)
     {
         ValidateExportPaths(sourcePath, outputPath);
+        double fitToleranceCentimeters = precision.GetFitToleranceCentimeters();
 
         PartDocument? partDocument = null;
         bool openedHere = false;
@@ -113,7 +117,14 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
                 DataMedium medium = inventorApplication.TransientObjects.CreateDataMedium();
                 medium.FileName = temporaryOutputPath;
 
-                _ = translator.HasSaveCopyAsOptions[partDocument, context, options];
+                if (!translator.HasSaveCopyAsOptions[partDocument, context, options])
+                {
+                    throw new InvalidOperationException(
+                        $"Inventor STEP translator '{StepTranslatorId}' did not provide export options for '{sourcePath}'. " +
+                        "Confirm that the Inventor 2027 STEP translator is enabled and the source part is valid.");
+                }
+
+                options.Value["export_fit_tolerance"] = fitToleranceCentimeters;
 
                 if (IOFile.Exists(outputPath))
                 {

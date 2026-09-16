@@ -24,11 +24,22 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <EmbeddedResource Include="..\..\assets\smart-export-16.png"
+                      Link="Assets\smart-export-16.png"
+                      LogicalName="SmartManufacturingExporter.AddIn.Assets.smart-export-16.png" />
+    <EmbeddedResource Include="..\..\assets\smart-export-32.png"
+                      Link="Assets\smart-export-32.png"
+                      LogicalName="SmartManufacturingExporter.AddIn.Assets.smart-export-32.png" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <PlatformTarget>x64</PlatformTarget>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

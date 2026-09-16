@@ -130,6 +130,43 @@ public sealed class ProjectBoundaryTests
         Assert.Equal($"{versionPrefix}.0", manifestVersion);
     }
 
+    [Fact]
+    public void SmartExportVisualAssetsExistAndAreEmbeddedByTheirOwningHosts()
+    {
+        string projectRoot = FindProjectRoot();
+        string assetsRoot = Path.Combine(projectRoot, "assets");
+
+        Assert.True(File.Exists(Path.Combine(assetsRoot, "smart-export-16.png")));
+        Assert.True(File.Exists(Path.Combine(assetsRoot, "smart-export-32.png")));
+
+        XDocument uiProject = XDocument.Load(Path.Combine(
+            projectRoot,
+            "src",
+            "SmartManufacturingExporter.UI",
+            "SmartManufacturingExporter.UI.csproj"));
+        string[] uiResources = uiProject
+            .Descendants("Resource")
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .ToArray();
+        Assert.Contains(@"..\..\assets\smart-export-32.png", uiResources);
+
+        XDocument addInProject = XDocument.Load(Path.Combine(
+            projectRoot,
+            "src",
+            "SmartManufacturingExporter.AddIn",
+            "SmartManufacturingExporter.AddIn.csproj"));
+        string[] addInResources = addInProject
+            .Descendants("EmbeddedResource")
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .ToArray();
+        Assert.Contains(@"..\..\assets\smart-export-16.png", addInResources);
+        Assert.Contains(@"..\..\assets\smart-export-32.png", addInResources);
+    }
+
     private static string FindProjectRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

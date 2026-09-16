@@ -19,6 +19,34 @@ public sealed class SmartExportViewModelTests
     }
 
     [Fact]
+    public void ConstructorExposesStablePrecisionOptionsAndDefaultsToLow()
+    {
+        Fixture fixture = CreateFixture();
+
+        Assert.Same(fixture.ViewModel.StepPrecisionOptions, fixture.ViewModel.StepPrecisionOptions);
+        Assert.Equal(
+            [StepExportPrecision.Low, StepExportPrecision.Medium, StepExportPrecision.Highest],
+            fixture.ViewModel.StepPrecisionOptions);
+        Assert.Equal(StepExportPrecision.Low, fixture.ViewModel.SelectedStepPrecision);
+        Assert.Contains("spline-fit", fixture.ViewModel.StepPrecisionDescription, StringComparison.Ordinal);
+        Assert.Contains("file size", fixture.ViewModel.StepPrecisionDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SelectingPrecisionUpdatesDescriptionAndRaisesNotifications()
+    {
+        Fixture fixture = CreateFixture();
+        List<string?> changedProperties = [];
+        fixture.ViewModel.PropertyChanged += (_, eventArgs) => changedProperties.Add(eventArgs.PropertyName);
+
+        fixture.ViewModel.SelectedStepPrecision = StepExportPrecision.Highest;
+
+        Assert.Contains(nameof(SmartExportViewModel.SelectedStepPrecision), changedProperties);
+        Assert.Contains(nameof(SmartExportViewModel.StepPrecisionDescription), changedProperties);
+        Assert.Contains("finest", fixture.ViewModel.StepPrecisionDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void SelectNoneAndSelectAllUpdateRowsAndCanExport()
     {
         Fixture fixture = CreateFixture();
@@ -42,8 +70,24 @@ public sealed class SmartExportViewModelTests
 
         fixture.ViewModel.ExportSelected();
 
-        Assert.Equal([(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step")], fixture.Gateway.ExportCalls);
+        Assert.Equal(
+            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Low)],
+            fixture.Gateway.ExportCalls);
         Assert.Equal("Export complete: 1 succeeded, 0 failed.", fixture.ViewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void ExportSelectedPassesHighestPrecisionToEveryCheckedExport()
+    {
+        Fixture fixture = CreateFixture();
+        fixture.ViewModel.Rows[0].IsSelected = false;
+        fixture.ViewModel.SelectedStepPrecision = StepExportPrecision.Highest;
+
+        fixture.ViewModel.ExportSelected();
+
+        Assert.Equal(
+            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Highest)],
+            fixture.Gateway.ExportCalls);
     }
 
     [Fact]
@@ -82,7 +126,7 @@ public sealed class SmartExportViewModelTests
 
     private sealed class FakeGateway : IInventorPhase1Gateway
     {
-        public List<(string SourcePath, string OutputPath)> ExportCalls { get; } = [];
+        public List<(string SourcePath, string OutputPath, StepExportPrecision Precision)> ExportCalls { get; } = [];
 
         public Dictionary<string, Exception> Failures { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -93,9 +137,12 @@ public sealed class SmartExportViewModelTests
                 new("Beta:1", @"C:\Models\Beta.ipt", ComponentDocumentKind.Part, false),
             ]);
 
-        public void ExportPartAsStep(string sourcePath, string outputPath)
+        public void ExportPartAsStep(
+            string sourcePath,
+            string outputPath,
+            StepExportPrecision precision)
         {
-            ExportCalls.Add((sourcePath, outputPath));
+            ExportCalls.Add((sourcePath, outputPath, precision));
             if (Failures.TryGetValue(sourcePath, out Exception? failure))
             {
                 throw failure;

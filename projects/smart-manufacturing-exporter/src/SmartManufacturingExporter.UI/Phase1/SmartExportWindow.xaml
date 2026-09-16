@@ -7,7 +7,8 @@
         MinWidth="700"
         MinHeight="440"
         WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        Icon="/SmartManufacturingExporter.UI;component/Assets/smart-export-32.png">
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -45,14 +46,38 @@
         </DataGrid>
 
         <Grid Grid.Row="3" Margin="0,14,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="Destination" />
-            <TextBox Grid.Column="1" MinWidth="300" VerticalContentAlignment="Center" Text="{Binding DestinationDirectory, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Grid.Column="2" Width="88" Margin="8,0,0,0" Padding="8,4" Click="Browse_Click" Content="Browse..." />
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="Destination" />
+            <TextBox Grid.Row="0" Grid.Column="1" MinWidth="300" VerticalContentAlignment="Center" Text="{Binding DestinationDirectory, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Grid.Row="0" Grid.Column="2" Width="88" Margin="8,0,0,0" Padding="8,4" Click="Browse_Click" Content="Browse..." />
+
+            <TextBlock x:Name="StepPrecisionLabel"
+                       Grid.Row="1"
+                       Grid.Column="0"
+                       Margin="0,12,10,0"
+                       VerticalAlignment="Top"
+                       FontWeight="SemiBold"
+                       Text="STEP precision" />
+            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                <ComboBox Width="150"
+                          HorizontalAlignment="Left"
+                          ItemsSource="{Binding StepPrecisionOptions}"
+                          SelectedItem="{Binding SelectedStepPrecision, Mode=TwoWay}"
+                          AutomationProperties.Name="STEP precision"
+                          AutomationProperties.LabeledBy="{Binding ElementName=StepPrecisionLabel}" />
+                <TextBlock Margin="0,5,0,0"
+                           Foreground="DimGray"
+                           Text="{Binding StepPrecisionDescription}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="4">

@@ -1,6 +1,6 @@
 # Smart Manufacturing Exporter
 
-Smart Manufacturing Exporter `0.2.1` is a Windows add-in for Autodesk Inventor 2027. It reviews unique top-level parts in an assembly and exports an explicit selection as STEP files.
+Smart Manufacturing Exporter `0.3.0` is a Windows add-in for Autodesk Inventor 2027. It reviews unique top-level parts in an assembly and exports an explicit selection as STEP files with a chosen spline-fit precision.
 
 Phase 1 is ready for live Inventor testing. Compilation, automated tests, and packaging pass; the documented five-part Inventor acceptance scenario is not yet claimed as run.
 
@@ -12,6 +12,7 @@ Phase 1 is ready for live Inventor testing. Compilation, automated tests, and pa
 - Excludes suppressed occurrences, assemblies, and unsupported document types.
 - Deduplicates repeated source paths case-insensitively and shows their top-level quantity.
 - Selects all eligible parts by default and provides Select All and Select None controls.
+- Provides Low, Medium, and Highest STEP spline-fit precision presets.
 - Exports only checked rows through Inventor 2027's installed STEP translator.
 - Rejects unwritable destinations and existing output conflicts.
 - Atomically finalizes new `.step` files without overwriting another file.
@@ -122,10 +123,21 @@ For the first test, use sanitized CAD files outside the Git repository and choos
 2. Open the Smart Export ribbon tab and select Smart Export.
 3. Review the checklist. Each row represents one unique saved direct top-level `.ipt` document; Quantity is the number of matching top-level occurrences.
 4. Use Select None and then check only the parts you want, or leave all eligible parts selected.
-5. Select Browse and choose an existing writable destination directory.
-6. Select Export STEP.
-7. Read the status message at the bottom of the window. It reports the successful and failed export counts and identifies individual failures.
-8. Confirm the destination contains one `<part-filename>.step` file for each successful selected row.
+5. Choose STEP precision. Low preserves Inventor's documented default; Medium and Highest use progressively tighter spline-fit tolerances.
+6. Select Browse and choose an existing writable destination directory.
+7. Select Export STEP.
+8. Read the status message at the bottom of the window. It reports the successful and failed export counts and identifies individual failures.
+9. Confirm the destination contains one `<part-filename>.step` file for each successful selected row.
+
+STEP precision presets:
+
+| Preset | Translator tolerance | Practical use |
+| --- | --- | --- |
+| Low | `0.001 cm` (`0.01 mm`) | Inventor's documented default and the smallest typical file size |
+| Medium | `0.0001 cm` (`0.001 mm`) | Finer spline approximation when downstream inspection needs it |
+| Highest | `0.00001 cm` (`0.0001 mm`) | Tightest documented tolerance, with potentially larger files and longer translation time |
+
+This setting controls the STEP translator's spline-fit tolerance. It is not an STL-style mesh resolution control, and it does not make every kind of exact analytic geometry more accurate. Use Low unless a downstream system or inspection comparison demonstrates that a tighter spline approximation is needed.
 
 Expected safety behavior:
 
@@ -178,6 +190,7 @@ The script validates and removes only this add-in's per-user manifest and binary
 | Destination is rejected | The folder must already exist and grant permission to add files. | Create or choose a writable folder owned by the current user. |
 | Export is blocked by an existing file | Phase 1 never overwrites an existing `.step`. | Choose a new empty destination or manually move the old output after confirming it is safe to do so. |
 | One item reports a STEP translator failure | Confirm Autodesk's STEP translator is installed and available in Inventor 2027. | Retry with one sanitized part and retain the complete error message for diagnosis. |
+| Highest precision takes longer or produces a larger file | A tighter spline-fit tolerance can increase translation work and STEP size. | Retry with Medium or Low unless the downstream workflow requires Highest. |
 | Updated DLL cannot be copied or loaded | Inventor may still hold the assembly open. | Close every Inventor process, rerun the installer, and restart Inventor. |
 
 When reporting a problem, include the Inventor 2027 display version, add-in version, active document type, exact status or load message, and whether the same part exports through Inventor's built-in STEP command. Do not attach proprietary CAD.
@@ -198,7 +211,8 @@ Independent per-plugin version numbers and changelogs are not active yet. They r
 - Scanning is limited to unique top-level part documents. Recursive subassemblies begin in Phase 2.
 - The checklist does not yet display detailed exclusion notices.
 - Existing STEP files are blocking conflicts and are never silently overwritten.
-- STEP translation uses Inventor 2027's installed translator defaults. AP203, AP214, and AP242 option selection begins only after the exact option keys are verified.
+- STEP application protocol selection is not exposed yet; the installed Inventor 2027 translator's protocol default remains in effect.
+- Precision presets control spline-fit tolerance only, not tessellation or every exact analytic surface.
 - Browser folders, classifications, smart rules, DXF, PDF, presets, and quick export remain later phases.
 - The live five-part acceptance result is not claimed until the [Phase 1 test plan](docs/PHASE1_TEST_PLAN.md) is executed in Inventor 2027.
 - A one-click installer and GitHub Release package are not published before live acceptance passes.
