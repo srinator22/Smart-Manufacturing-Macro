@@ -37,11 +37,12 @@ Deliver the Phase 2 Smart Manufacturing Exporter slice: recursive assembly disco
 - 2026-09-16T12:56Z - Implemented recursive scanning, four scopes, tri-state tree selection, `.ipt`/`.iam` unique export, documentation, and version 0.4.0. Full local `scripts/check.cmd` passed with 49 tests and an 80.00% mutation score; independent review remains.
 - 2026-09-17T08:25Z - Repaired reviewer-identified regression assertions. Independent Sol review passed; full local gate passed with 50 tests and an 80.00% mutation score. Live rendered inspection and delivery remain.
 - 2026-09-17T08:31Z - GitHub review caught mixed-scope assembly omission before merge. Added a failing regression test, then separated each node's own document selection from its aggregate tri-state value; targeted regression passes.
+- 2026-09-17T08:40Z - GitHub re-review caught quadratic `CanExport` reevaluation for parent selection. Added a failing notification-count regression and changed recursive selection to emit one completion notification per user action; focused regressions pass.
 
 ## Review verdict
 PASS
 
-- The mixed-scope repair correctly separates each exportable node's own document selection from its aggregate tri-state UI value. Export planning now retains a selected assembly when descendant selection makes that node indeterminate, while downward propagation, ancestor recomputation, case-insensitive deduplication, and `CanExport` notifications remain intact. The focused view-model suite passes 14/14; no new dependency, boundary, safety, or scope issue was found.
+- Recursive propagation now invokes one shared completion callback only after the externally requested tree change finishes, so `CanExport` is reevaluated once instead of once per changed node. Internal child updates and ancestor tri-state recomputation remain callback-free, mixed-scope document selection remains correct, and scope rebuild notifications are preserved. The two focused regressions pass; no new correctness, boundary, dependency, or test-coverage issue was found.
 
 ## Retro
 <!-- filled by docs/procedures/retro.md -->

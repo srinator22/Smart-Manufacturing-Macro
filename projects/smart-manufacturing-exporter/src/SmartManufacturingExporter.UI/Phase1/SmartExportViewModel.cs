@@ -188,26 +188,15 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
             .Select(candidate => candidate.SourcePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        RootNode = new(session.HierarchyRoot!, exportablePaths);
+        RootNode = new(session.HierarchyRoot!, exportablePaths, OnTreeSelectionCompleted);
         RootNode.IsExpanded = true;
-        foreach (SmartExportTreeNodeViewModel node in RootNode.DescendantsAndSelf())
-        {
-            node.PropertyChanged += OnNodePropertyChanged;
-        }
 
         RootNodes.Clear();
         RootNodes.Add(RootNode);
         OnPropertyChanged(nameof(RootNode));
     }
 
-    private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
-    {
-        if (eventArgs.PropertyName is nameof(SmartExportTreeNodeViewModel.IsSelected)
-            or nameof(SmartExportTreeNodeViewModel.IsDocumentSelected))
-        {
-            OnPropertyChanged(nameof(CanExport));
-        }
-    }
+    private void OnTreeSelectionCompleted() => OnPropertyChanged(nameof(CanExport));
 
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

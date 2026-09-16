@@ -104,6 +104,24 @@ public sealed class SmartExportViewModelTests
     }
 
     [Fact]
+    public void ParentSelectionRaisesCanExportOncePerCompletedTreeChange()
+    {
+        Fixture fixture = CreateFixture();
+        int canExportNotifications = 0;
+        fixture.ViewModel.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.PropertyName == nameof(SmartExportViewModel.CanExport))
+            {
+                canExportNotifications++;
+            }
+        };
+
+        FindNode(fixture.ViewModel, "SubA:1").IsSelected = false;
+
+        Assert.Equal(1, canExportNotifications);
+    }
+
+    [Fact]
     public void ExpandAllAndCollapseAllUpdateCompleteTree()
     {
         Fixture fixture = CreateFixture();

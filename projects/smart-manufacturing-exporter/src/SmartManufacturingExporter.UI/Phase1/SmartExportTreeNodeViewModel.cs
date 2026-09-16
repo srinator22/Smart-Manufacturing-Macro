@@ -14,6 +14,7 @@ namespace SmartManufacturingExporter.UI.Phase1;
 public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
 {
     private readonly SmartExportTreeNodeViewModel? parent;
+    private readonly Action? selectionChanged;
     private bool isExpanded;
     private bool ownSelection;
     private bool? selection;
@@ -21,13 +22,30 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
 
     public SmartExportTreeNodeViewModel(
         ExportHierarchyNode node,
+        ISet<string> exportablePaths)
+        : this(node, exportablePaths, null, null)
+    {
+    }
+
+    internal SmartExportTreeNodeViewModel(
+        ExportHierarchyNode node,
         ISet<string> exportablePaths,
-        SmartExportTreeNodeViewModel? parent = null)
+        Action selectionChanged)
+        : this(node, exportablePaths, null, selectionChanged)
+    {
+    }
+
+    private SmartExportTreeNodeViewModel(
+        ExportHierarchyNode node,
+        ISet<string> exportablePaths,
+        SmartExportTreeNodeViewModel? parent,
+        Action? selectionChanged)
     {
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(exportablePaths);
 
         this.parent = parent;
+        this.selectionChanged = selectionChanged;
         NodeId = node.NodeId;
         DisplayName = node.DisplayName;
         SourcePath = node.SourcePath;
@@ -35,7 +53,8 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
         Quantity = node.Quantity;
         IsExportable = !string.IsNullOrWhiteSpace(SourcePath) && exportablePaths.Contains(SourcePath);
         ownSelection = IsExportable;
-        Children = new(node.Children.Select(child => new SmartExportTreeNodeViewModel(child, exportablePaths, this)));
+        Children = new(node.Children.Select(
+            child => new SmartExportTreeNodeViewModel(child, exportablePaths, this, selectionChanged)));
         CanSelect = IsExportable || Children.Any(child => child.CanSelect);
         selection = CalculateSelection();
     }
@@ -71,6 +90,7 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
             }
 
             ApplySelection(value ?? false);
+            selectionChanged?.Invoke();
         }
     }
 
