@@ -1,5 +1,5 @@
-// Purpose: Present a deterministic, COM-free selection and export interaction for Phase 1.
-// Inputs: A successful workflow session, row selections, and a destination directory.
+// Purpose: Present a deterministic, COM-free hierarchy selection and export interaction.
+// Inputs: A successful workflow session, tree selections, scope, and a destination directory.
 // Outputs: Export commands, eligibility state, and actionable status text for the WPF host.
 // Dependencies: Application workflow and Core Phase 1 models only.
 // Assumptions: Calls are synchronous on the Inventor UI thread and the session remains immutable.
@@ -26,14 +26,15 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
     private readonly SmartExportWorkflow workflow;
     private readonly Phase1StartResult session;
     private string destinationDirectory = string.Empty;
+    private ExportScopeMode selectedScope = ExportScopeMode.PartsRecursive;
     private StepExportPrecision selectedStepPrecision = StepExportPrecision.Low;
-    private string statusMessage = "Choose a destination, review the selected parts, then export.";
+    private string statusMessage = "Choose a destination, review the selected documents, then export.";
 
     public SmartExportViewModel(SmartExportWorkflow workflow, Phase1StartResult session)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(session);
-        if (!session.IsSuccess || string.IsNullOrWhiteSpace(session.RootAssemblyPath))
+        if (!session.IsSuccess || string.IsNullOrWhiteSpace(session.RootAssemblyPath) || session.HierarchyRoot is null)
         {
             throw new ArgumentException("A successful Phase 1 session with a root assembly is required.", nameof(session));
         }
@@ -41,18 +42,35 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
         this.workflow = workflow;
         this.session = session;
         RootAssemblyPath = session.RootAssemblyPath;
-        Rows = new(session.Candidates.Select(candidate => new SmartExportRowViewModel(candidate)));
-        foreach (SmartExportRowViewModel row in Rows)
-        {
-            row.PropertyChanged += OnRowPropertyChanged;
-        }
+        RebuildTree();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string RootAssemblyPath { get; }
 
-    public ObservableCollection<SmartExportRowViewModel> Rows { get; }
+    public ObservableCollection<SmartExportTreeNodeViewModel> RootNodes { get; } = [];
+
+    public SmartExportTreeNodeViewModel RootNode { get; private set; } = null!;
+
+    public IReadOnlyList<ExportScopeMode> ScopeOptions { get; } = Enum.GetValues<ExportScopeMode>();
+
+    public ExportScopeMode SelectedScope
+    {
+        get => selectedScope;
+        set
+        {
+            if (selectedScope == value)
+            {
+                return;
+            }
+
+            selectedScope = value;
+            RebuildTree();
+            OnPropertyChanged(nameof(SelectedScope));
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
 
     public IReadOnlyList<StepExportPrecision> StepPrecisionOptions { get; } = PrecisionOptions;
 
@@ -112,30 +130,28 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
         }
     }
 
-    public bool CanExport => Rows.Any(row => row.IsSelected) && !string.IsNullOrWhiteSpace(DestinationDirectory);
+    public bool CanExport => SelectedSourcePaths().Length != 0 && !string.IsNullOrWhiteSpace(DestinationDirectory);
 
     public void SelectAll()
     {
-        foreach (SmartExportRowViewModel row in Rows)
-        {
-            row.IsSelected = true;
-        }
+        RootNode.IsSelected = true;
     }
 
     public void SelectNone()
     {
-        foreach (SmartExportRowViewModel row in Rows)
-        {
-            row.IsSelected = false;
-        }
+        RootNode.IsSelected = false;
     }
+
+    public void ExpandAll() => RootNode.SetExpandedRecursively(true);
+
+    public void CollapseAll() => RootNode.SetExpandedRecursively(false);
 
     public void ExportSelected()
     {
-        string[] selectedPaths = Rows.Where(row => row.IsSelected).Select(row => row.SourcePath).ToArray();
         StepExportPlan plan = workflow.BuildStepPlan(
             session,
-            selectedPaths,
+            SelectedScope,
+            SelectedSourcePaths(),
             DestinationDirectory,
             SelectedStepPrecision);
         ValidationIssue[] errors = plan.Issues
@@ -158,9 +174,35 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
             : $"{summary} {string.Join(" ", failureDetails)}";
     }
 
-    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+    private string[] SelectedSourcePaths() => RootNode
+        .DescendantsAndSelf()
+        .Where(node => node.IsExportable && node.IsSelected == true && !string.IsNullOrWhiteSpace(node.SourcePath))
+        .Select(node => node.SourcePath!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private void RebuildTree()
     {
-        if (eventArgs.PropertyName == nameof(SmartExportRowViewModel.IsSelected))
+        IReadOnlyList<ExportCandidate> candidates = SmartExportWorkflow.GetCandidatesForScope(session, selectedScope);
+        HashSet<string> exportablePaths = candidates
+            .Select(candidate => candidate.SourcePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        RootNode = new(session.HierarchyRoot!, exportablePaths);
+        RootNode.IsExpanded = true;
+        foreach (SmartExportTreeNodeViewModel node in RootNode.DescendantsAndSelf())
+        {
+            node.PropertyChanged += OnNodePropertyChanged;
+        }
+
+        RootNodes.Clear();
+        RootNodes.Add(RootNode);
+        OnPropertyChanged(nameof(RootNode));
+    }
+
+    private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName == nameof(SmartExportTreeNodeViewModel.IsSelected))
         {
             OnPropertyChanged(nameof(CanExport));
         }
