@@ -50,7 +50,7 @@ PASS
 
 ## Retro
 
-- Discovery routes: the analyzer caught the WPF bound-property shape before merge, the canonical gate caught the expected stale generated changelog before commit finalization, and the temporary offscreen preview harness compile error was self-corrected outside the repository. No defect escaped merge and no user-reported defect belongs to version 0.3.0 yet.
+- Defect memory: no defect escaped merge and no user-reported defect belongs to version 0.3.0 yet. Pre-merge findings and self-corrections are intentionally omitted from durable task memory.
 - Regression guards: exact centimeter mappings, invalid precision, selected-only propagation, conflict behavior, embedded icon resources, and version coherence are covered by 40 unit tests and 5 architecture tests.
 - Lessons: none proposed. Pre-merge checks and review caught all observed defects, the user's earlier successful live test is already represented by the installation and acceptance workflow, and no approved lesson was consulted.
 - Delivery evidence: PR #7 merged as `cf1a51520608a0c421f05fb1c991f03583baf473`; required CI passed for the exact branch and main SHAs. The per-user Debug add-in was rebuilt and installed from that main SHA while Inventor was closed, and reports ProductVersion `0.3.0+cf1a51520608a0c421f05fb1c991f03583baf473`.
