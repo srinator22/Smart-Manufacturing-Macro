@@ -54,6 +54,8 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
 
     public bool IsExportable { get; }
 
+    public bool IsDocumentSelected => IsExportable && ownSelection;
+
     public bool CanSelect { get; }
 
     public ObservableCollection<SmartExportTreeNodeViewModel> Children { get; }
@@ -111,9 +113,10 @@ public sealed class SmartExportTreeNodeViewModel : INotifyPropertyChanged
     private void ApplySelection(bool value)
     {
         isApplyingSelection = true;
-        if (IsExportable)
+        if (IsExportable && ownSelection != value)
         {
             ownSelection = value;
+            OnPropertyChanged(nameof(IsDocumentSelected));
         }
 
         foreach (SmartExportTreeNodeViewModel child in Children)

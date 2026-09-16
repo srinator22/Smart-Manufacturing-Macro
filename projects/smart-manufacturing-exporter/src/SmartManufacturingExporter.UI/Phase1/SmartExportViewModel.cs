@@ -176,7 +176,7 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
 
     private string[] SelectedSourcePaths() => RootNode
         .DescendantsAndSelf()
-        .Where(node => node.IsExportable && node.IsSelected == true && !string.IsNullOrWhiteSpace(node.SourcePath))
+        .Where(node => node.IsDocumentSelected && !string.IsNullOrWhiteSpace(node.SourcePath))
         .Select(node => node.SourcePath!)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
@@ -202,7 +202,8 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
     {
-        if (eventArgs.PropertyName == nameof(SmartExportTreeNodeViewModel.IsSelected))
+        if (eventArgs.PropertyName is nameof(SmartExportTreeNodeViewModel.IsSelected)
+            or nameof(SmartExportTreeNodeViewModel.IsDocumentSelected))
         {
             OnPropertyChanged(nameof(CanExport));
         }

@@ -139,6 +139,29 @@ public sealed class SmartExportViewModelTests
     }
 
     [Fact]
+    public void MixedScopeExportsSelectedAssemblyWhenItsTreeStateIsIndeterminate()
+    {
+        Fixture fixture = CreateFixture();
+        fixture.ViewModel.SelectedScope = ExportScopeMode.AssembliesAndParts;
+        fixture.ViewModel.SelectNone();
+        SmartExportTreeNodeViewModel subassembly = FindNode(fixture.ViewModel, "SubA:1");
+        SmartExportTreeNodeViewModel innerAssembly = FindNode(fixture.ViewModel, "Inner:1");
+        subassembly.IsSelected = true;
+        innerAssembly.IsSelected = false;
+
+        Assert.Null(subassembly.IsSelected);
+
+        fixture.ViewModel.ExportSelected();
+
+        Assert.Equal(
+            [
+                (@"C:\Models\Alpha.ipt", @"C:\Exports\Alpha.step", StepExportPrecision.Low),
+                (@"C:\Models\SubA.iam", @"C:\Exports\SubA.step", StepExportPrecision.Low),
+            ],
+            fixture.Gateway.ExportCalls);
+    }
+
+    [Fact]
     public void ConstructorExposesStablePrecisionOptionsAndDefaultsToLow()
     {
         Fixture fixture = CreateFixture();

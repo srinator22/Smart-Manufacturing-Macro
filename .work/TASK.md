@@ -36,11 +36,12 @@ Deliver the Phase 2 Smart Manufacturing Exporter slice: recursive assembly disco
 - 2026-09-16T12:43Z - Opened the Phase 2 hierarchy task from clean green main; user requested maximum verified progress within the remaining usage window.
 - 2026-09-16T12:56Z - Implemented recursive scanning, four scopes, tri-state tree selection, `.ipt`/`.iam` unique export, documentation, and version 0.4.0. Full local `scripts/check.cmd` passed with 49 tests and an 80.00% mutation score; independent review remains.
 - 2026-09-17T08:25Z - Repaired reviewer-identified regression assertions. Independent Sol review passed; full local gate passed with 50 tests and an 80.00% mutation score. Live rendered inspection and delivery remain.
+- 2026-09-17T08:31Z - GitHub review caught mixed-scope assembly omission before merge. Added a failing regression test, then separated each node's own document selection from its aggregate tri-state value; targeted regression passes.
 
 ## Review verdict
 PASS
 
-- Recursive traversal, scope filtering, case-insensitive unique aggregation, tri-state propagation, deterministic selection, unique `.ipt`/`.iam` planning, non-overwrite behavior, per-item isolation, precision forwarding, COM boundaries, and documentation satisfy the task criteria. The repaired tests retain the prior safety and ordering contracts while adding Phase 2 coverage. No secrets, new dependencies, skipped checks, or unrelated changes were found.
+- The mixed-scope repair correctly separates each exportable node's own document selection from its aggregate tri-state UI value. Export planning now retains a selected assembly when descendant selection makes that node indeterminate, while downward propagation, ancestor recomputation, case-insensitive deduplication, and `CanExport` notifications remain intact. The focused view-model suite passes 14/14; no new dependency, boundary, safety, or scope issue was found.
 
 ## Retro
 <!-- filled by docs/procedures/retro.md -->
