@@ -1,19 +1,21 @@
 # Smart Manufacturing Exporter
 
-Smart Manufacturing Exporter `0.3.0` is a Windows add-in for Autodesk Inventor 2027. It reviews unique top-level parts in an assembly and exports an explicit selection as STEP files with a chosen spline-fit precision.
+Smart Manufacturing Exporter `0.4.0` is a Windows add-in for Autodesk Inventor 2027. It presents a recursive assembly tree and exports an explicit selection of unique part and assembly documents as STEP files with a chosen spline-fit precision.
 
-Phase 1 is ready for live Inventor testing. Compilation, automated tests, and packaging pass; the documented five-part Inventor acceptance scenario is not yet claimed as run.
+Phases 1 and 2 are ready for live Inventor testing. Compilation, automated tests, and packaging are verified by the repository gate; live three-level hierarchy and assembly-export acceptance remain unclaimed until exercised in Inventor 2027.
 
 ## What it does
 
 - Adds a Smart Export command to the Inventor Assembly ribbon.
 - Requires a saved assembly to be the active document.
-- Scans direct top-level occurrences and includes saved Inventor part documents.
-- Excludes suppressed occurrences, assemblies, and unsupported document types.
-- Deduplicates repeated source paths case-insensitively and shows their top-level quantity.
-- Selects all eligible parts by default and provides Select All and Select None controls.
+- Recursively scans saved Inventor part and assembly occurrences.
+- Excludes suppressed occurrences and their descendants, unresolved documents, and unsupported document types.
+- Preserves occurrence hierarchy while deduplicating export source paths case-insensitively and showing total quantity. Selection is per source document: every occurrence of the same document shares one checkbox state, so checking or unchecking any occurrence applies to all of them and the document exports exactly once.
+- Provides Top Level Only, Parts Recursive, Assemblies Only, and Assemblies And Parts scopes.
+- Uses a tri-state tree: parent changes propagate downward and child changes update ancestors.
+- Selects all eligible documents by default and provides Select All, Select None, Expand All, and Collapse All controls.
 - Provides Low, Medium, and Highest STEP spline-fit precision presets.
-- Exports only checked rows through Inventor 2027's installed STEP translator.
+- Exports each checked `.ipt` or `.iam` source document once through Inventor 2027's installed STEP translator.
 - Rejects unwritable destinations and existing output conflicts.
 - Atomically finalizes new `.step` files without overwriting another file.
 - Reports per-item success and failure while continuing with later selected items.
@@ -121,13 +123,22 @@ For the first test, use sanitized CAD files outside the Git repository and choos
 
 1. Open a saved Inventor `.iam` assembly and make it the active document.
 2. Open the Smart Export ribbon tab and select Smart Export.
-3. Review the checklist. Each row represents one unique saved direct top-level `.ipt` document; Quantity is the number of matching top-level occurrences.
-4. Use Select None and then check only the parts you want, or leave all eligible parts selected.
+3. Choose an inclusion scope and review the recursive assembly tree. Quantity is the total number of occurrences that reference the same source document, and checking or unchecking any one occurrence checks or unchecks every occurrence of that document.
+4. Expand or collapse the hierarchy as needed. Use Select None and then check only the documents you want, or leave all eligible documents selected. A shaded checkbox means only part of that branch is selected.
 5. Choose STEP precision. Low preserves Inventor's documented default; Medium and Highest use progressively tighter spline-fit tolerances.
 6. Select Browse and choose an existing writable destination directory.
 7. Select Export STEP.
 8. Read the status message at the bottom of the window. It reports the successful and failed export counts and identifies individual failures.
-9. Confirm the destination contains one `<part-filename>.step` file for each successful selected row.
+9. Confirm the destination contains one `<source-filename>.step` file for each successful unique selected source document.
+
+Inclusion scopes:
+
+| Scope | Eligible documents |
+| --- | --- |
+| Top Level Only | Saved `.ipt` parts directly under the active assembly |
+| Parts Recursive | Saved `.ipt` parts at every scanned depth |
+| Assemblies Only | The active `.iam` root and saved descendant `.iam` assemblies |
+| Assemblies And Parts | The active root and every saved descendant `.iam` and `.ipt` document |
 
 STEP precision presets:
 
@@ -145,9 +156,9 @@ Expected safety behavior:
 - An unsaved active assembly is rejected before scanning.
 - An existing destination filename blocks the plan instead of being overwritten.
 - A conflict that appears during export causes that item to fail without replacing the conflicting file.
-- A failure for one selected part does not prevent later selected parts from being attempted.
+- A failure for one selected document does not prevent later selected documents from being attempted.
 
-The formal five-part first-test procedure and evidence checklist are in [docs/PHASE1_TEST_PLAN.md](docs/PHASE1_TEST_PLAN.md).
+The formal five-part first-test procedure and evidence checklist are in [docs/PHASE1_TEST_PLAN.md](docs/PHASE1_TEST_PLAN.md). Recursive hierarchy, scope, tri-state, and `.iam` export checks are in [docs/PHASE2_TEST_PLAN.md](docs/PHASE2_TEST_PLAN.md).
 
 ## Debugging in Inventor
 
@@ -186,10 +197,10 @@ The script validates and removes only this add-in's per-user manifest and binary
 | Add-in is absent from the Add-In Manager | Confirm the two paths in Verify installation exist and the manifest points to the installed DLL. | Close Inventor, rebuild, rerun the installer, and restart Inventor 2027. |
 | Inventor reports an add-in load error | Confirm this is Inventor 2027 and the `net10.0-windows` x64 build completed without errors. | Run `scripts\check.cmd`, reinstall the matching Release or Debug output, and retain the exact load message if it persists. |
 | Smart Export tab is missing | Confirm Smart Manufacturing Exporter is loaded and a saved assembly is active. | Activate a `.iam` document. Restart Inventor after the first installation if needed. |
-| The checklist is empty or missing expected content | Phase 1 includes only saved direct top-level `.ipt` documents. | Check for suppressed occurrences, subassemblies, unsaved parts, or parts that exist only below a subassembly. |
+| The tree is empty or missing expected content | The chosen scope may exclude that document kind or depth; suppressed branches are intentionally skipped. | Check the scope, suppression state, and whether each source document is saved and resolved. |
 | Destination is rejected | The folder must already exist and grant permission to add files. | Create or choose a writable folder owned by the current user. |
 | Export is blocked by an existing file | Phase 1 never overwrites an existing `.step`. | Choose a new empty destination or manually move the old output after confirming it is safe to do so. |
-| One item reports a STEP translator failure | Confirm Autodesk's STEP translator is installed and available in Inventor 2027. | Retry with one sanitized part and retain the complete error message for diagnosis. |
+| One item reports a STEP translator failure | Confirm Autodesk's STEP translator is installed and available in Inventor 2027. | Retry with one sanitized part or assembly and retain the complete error message for diagnosis. |
 | Highest precision takes longer or produces a larger file | A tighter spline-fit tolerance can increase translation work and STEP size. | Retry with Medium or Low unless the downstream workflow requires Highest. |
 | Updated DLL cannot be copied or loaded | Inventor may still hold the assembly open. | Close every Inventor process, rerun the installer, and restart Inventor. |
 
@@ -208,13 +219,12 @@ Independent per-plugin version numbers and changelogs are not active yet. They r
 
 ## Known limitations
 
-- Scanning is limited to unique top-level part documents. Recursive subassemblies begin in Phase 2.
 - The checklist does not yet display detailed exclusion notices.
 - Existing STEP files are blocking conflicts and are never silently overwritten.
 - STEP application protocol selection is not exposed yet; the installed Inventor 2027 translator's protocol default remains in effect.
 - Precision presets control spline-fit tolerance only, not tessellation or every exact analytic surface.
 - Browser folders, classifications, smart rules, DXF, PDF, presets, and quick export remain later phases.
-- The live five-part acceptance result is not claimed until the [Phase 1 test plan](docs/PHASE1_TEST_PLAN.md) is executed in Inventor 2027.
+- The live five-part and three-level hierarchy acceptance results are not claimed until exercised in Inventor 2027; the first procedure is in the [Phase 1 test plan](docs/PHASE1_TEST_PLAN.md).
 - A one-click installer and GitHub Release package are not published before live acceptance passes.
 
 ### Development workflow

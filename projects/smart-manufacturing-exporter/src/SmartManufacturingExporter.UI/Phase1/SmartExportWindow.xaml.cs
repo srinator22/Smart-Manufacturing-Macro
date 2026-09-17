@@ -18,6 +18,10 @@ public partial class SmartExportWindow : Window
 
     private void SelectNone_Click(object sender, RoutedEventArgs e) => ViewModel.SelectNone();
 
+    private void ExpandAll_Click(object sender, RoutedEventArgs e) => ViewModel.ExpandAll();
+
+    private void CollapseAll_Click(object sender, RoutedEventArgs e) => ViewModel.CollapseAll();
+
     private void Browse_Click(object sender, RoutedEventArgs e)
     {
         OpenFolderDialog dialog = new()

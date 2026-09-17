@@ -1,5 +1,5 @@
-// Purpose: Translate Inventor 2027 assembly and STEP translator state into the Phase 1 application ports.
-// Inputs: The live Inventor application, active top-level occurrences, and explicit STEP export settings.
+// Purpose: Translate Inventor 2027 assembly hierarchy and STEP translator state into application ports.
+// Inputs: The live Inventor application, recursive occurrences, and explicit STEP export settings.
 // Outputs: COM-free scan snapshots and STEP files created by Inventor's installed translator.
 // Dependencies: Inventor 2027 interop v31, conditionally compiled when its installed assembly exists.
 // Assumptions: Every call occurs synchronously on Inventor's owning STA thread.
@@ -41,50 +41,12 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
             return null;
         }
 
-        ComponentOccurrences occurrences = assembly.ComponentDefinition.Occurrences;
-        List<TopLevelOccurrenceSnapshot> snapshots = new(occurrences.Count);
-        for (int index = 1; index <= occurrences.Count; index++)
-        {
-            ComponentOccurrence occurrence = occurrences[index];
-            if (occurrence.Suppressed)
-            {
-                snapshots.Add(new(occurrence.Name, null, ComponentDocumentKind.Other, true));
-                continue;
-            }
-
-            ComponentDocumentKind documentKind = occurrence.DefinitionDocumentType switch
-            {
-                DocumentTypeEnum.kPartDocumentObject => ComponentDocumentKind.Part,
-                DocumentTypeEnum.kAssemblyDocumentObject => ComponentDocumentKind.Assembly,
-                _ => ComponentDocumentKind.Other,
-            };
-
-            string? sourcePath = null;
-            if (documentKind == ComponentDocumentKind.Part)
-            {
-                try
-                {
-                    PartComponentDefinition definition = (PartComponentDefinition)occurrence.Definition;
-                    PartDocument partDocument = (PartDocument)definition.Document;
-                    sourcePath = partDocument.FullFileName;
-                }
-                catch (COMException)
-                {
-                    // A Part snapshot with no path lets the application report the unresolved source explicitly.
-                }
-                catch (InvalidCastException)
-                {
-                    // A Part snapshot with no path lets the application report the inconsistent source explicitly.
-                }
-            }
-
-            snapshots.Add(new(occurrence.Name, sourcePath, documentKind, false));
-        }
-
-        return new(assembly.FullFileName, snapshots);
+        return new(
+            assembly.FullFileName,
+            SnapshotOccurrences(assembly.ComponentDefinition.Occurrences));
     }
 
-    public void ExportPartAsStep(
+    public void ExportDocumentAsStep(
         string sourcePath,
         string outputPath,
         StepExportPrecision precision)
@@ -92,7 +54,7 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
         ValidateExportPaths(sourcePath, outputPath);
         double fitToleranceCentimeters = precision.GetFitToleranceCentimeters();
 
-        PartDocument? partDocument = null;
+        Document? sourceDocument = null;
         bool openedHere = false;
         InvalidOperationException? comFailure = null;
         string destinationDirectory = IOPath.GetDirectoryName(outputPath)!;
@@ -103,10 +65,10 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
         {
             try
             {
-                partDocument = FindOpenPartDocument(sourcePath);
-                if (partDocument is null)
+                sourceDocument = FindOpenDocument(sourcePath);
+                if (sourceDocument is null)
                 {
-                    partDocument = (PartDocument)inventorApplication.Documents.Open(sourcePath, false);
+                    sourceDocument = (Document)inventorApplication.Documents.Open(sourcePath, false);
                     openedHere = true;
                 }
 
@@ -117,7 +79,7 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
                 DataMedium medium = inventorApplication.TransientObjects.CreateDataMedium();
                 medium.FileName = temporaryOutputPath;
 
-                if (!translator.HasSaveCopyAsOptions[partDocument, context, options])
+                if (!translator.HasSaveCopyAsOptions[sourceDocument, context, options])
                 {
                     throw new InvalidOperationException(
                         $"Inventor STEP translator '{StepTranslatorId}' did not provide export options for '{sourcePath}'. " +
@@ -132,7 +94,7 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
                         $"The STEP output already exists and will not be overwritten: '{outputPath}'.");
                 }
 
-                translator.SaveCopyAs(partDocument, context, options, medium);
+                translator.SaveCopyAs(sourceDocument, context, options, medium);
                 try
                 {
                     IOFile.Move(temporaryOutputPath, outputPath, false);
@@ -155,16 +117,16 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
         {
             TryDeleteTemporaryOutput(temporaryOutputPath);
 
-            if (openedHere && partDocument is not null)
+            if (openedHere && sourceDocument is not null)
             {
                 try
                 {
-                    partDocument.Close(true);
+                    sourceDocument.Close(true);
                 }
                 catch (COMException exception)
                 {
                     comFailure ??= new InvalidOperationException(
-                        $"Inventor could not close the part opened for STEP translator '{StepTranslatorId}': '{sourcePath}'.",
+                        $"Inventor could not close the document opened for STEP translator '{StepTranslatorId}': '{sourcePath}'.",
                         exception);
                 }
             }
@@ -192,7 +154,7 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
     {
         if (string.IsNullOrWhiteSpace(sourcePath))
         {
-            throw new ArgumentException("A nonblank Inventor part source path is required.", nameof(sourcePath));
+            throw new ArgumentException("A nonblank Inventor source path is required.", nameof(sourcePath));
         }
 
         if (string.IsNullOrWhiteSpace(outputPath))
@@ -200,9 +162,13 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
             throw new ArgumentException("A nonblank STEP output path is required.", nameof(outputPath));
         }
 
-        if (!string.Equals(IOPath.GetExtension(sourcePath), ".ipt", StringComparison.OrdinalIgnoreCase))
+        string sourceExtension = IOPath.GetExtension(sourcePath);
+        if (!string.Equals(sourceExtension, ".ipt", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(sourceExtension, ".iam", StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException($"The Inventor source must be an .ipt part: '{sourcePath}'.", nameof(sourcePath));
+            throw new ArgumentException(
+                $"The Inventor source must be an .ipt part or .iam assembly: '{sourcePath}'.",
+                nameof(sourcePath));
         }
 
         if (!string.Equals(IOPath.GetExtension(outputPath), ".step", StringComparison.OrdinalIgnoreCase))
@@ -212,7 +178,7 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
 
         if (!IOFile.Exists(sourcePath))
         {
-            throw new FileNotFoundException($"The Inventor part source does not exist: '{sourcePath}'.", sourcePath);
+            throw new FileNotFoundException($"The Inventor source does not exist: '{sourcePath}'.", sourcePath);
         }
 
         string? destinationDirectory = IOPath.GetDirectoryName(outputPath);
@@ -227,20 +193,84 @@ public sealed class InventorPhase1Gateway(Inventor.Application inventorApplicati
         }
     }
 
-    private PartDocument? FindOpenPartDocument(string sourcePath)
+    private Document? FindOpenDocument(string sourcePath)
     {
         Documents documents = inventorApplication.Documents;
         for (int index = 1; index <= documents.Count; index++)
         {
             Document document = documents[index];
-            if (document.DocumentType == DocumentTypeEnum.kPartDocumentObject
+            bool supportedDocument = document.DocumentType is DocumentTypeEnum.kPartDocumentObject
+                or DocumentTypeEnum.kAssemblyDocumentObject;
+            if (supportedDocument
                 && string.Equals(document.FullFileName, sourcePath, StringComparison.OrdinalIgnoreCase))
             {
-                return (PartDocument)document;
+                return document;
             }
         }
 
         return null;
+    }
+
+    private static List<ComponentOccurrenceSnapshot> SnapshotOccurrences(ComponentOccurrences occurrences)
+    {
+        List<ComponentOccurrenceSnapshot> snapshots = new(occurrences.Count);
+        for (int index = 1; index <= occurrences.Count; index++)
+        {
+            ComponentOccurrence occurrence = occurrences[index];
+            snapshots.Add(SnapshotOccurrence(occurrence));
+        }
+
+        return snapshots;
+    }
+
+    private static ComponentOccurrenceSnapshot SnapshotOccurrence(ComponentOccurrence occurrence)
+    {
+        if (occurrence.Suppressed)
+        {
+            return new(occurrence.Name, null, ComponentDocumentKind.Other, true, []);
+        }
+
+        ComponentDocumentKind documentKind = occurrence.DefinitionDocumentType switch
+        {
+            DocumentTypeEnum.kPartDocumentObject => ComponentDocumentKind.Part,
+            DocumentTypeEnum.kAssemblyDocumentObject => ComponentDocumentKind.Assembly,
+            _ => ComponentDocumentKind.Other,
+        };
+
+        string? sourcePath = null;
+        try
+        {
+            if (documentKind is ComponentDocumentKind.Part or ComponentDocumentKind.Assembly)
+            {
+                ComponentDefinition definition = occurrence.Definition;
+                sourcePath = ((Document)definition.Document).FullFileName;
+            }
+        }
+        catch (COMException)
+        {
+            // A pathless snapshot lets the application report the unresolved document explicitly.
+        }
+        catch (InvalidCastException)
+        {
+            // A pathless snapshot lets the application report inconsistent API state explicitly.
+        }
+
+        IReadOnlyList<ComponentOccurrenceSnapshot> children = documentKind == ComponentDocumentKind.Assembly
+            ? SnapshotSubOccurrences(occurrence.SubOccurrences)
+            : [];
+        return new(occurrence.Name, sourcePath, documentKind, false, children);
+    }
+
+    private static List<ComponentOccurrenceSnapshot> SnapshotSubOccurrences(
+        ComponentOccurrencesEnumerator occurrences)
+    {
+        List<ComponentOccurrenceSnapshot> snapshots = new(occurrences.Count);
+        for (int index = 1; index <= occurrences.Count; index++)
+        {
+            snapshots.Add(SnapshotOccurrence(occurrences[index]));
+        }
+
+        return snapshots;
     }
 
     private TranslatorAddIn ResolveStepTranslator()

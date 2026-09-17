@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -17,6 +18,9 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- UseWPF switches the SDK's implicit-usings set and drops System.IO; restore it explicitly
+         rather than add a using to every existing file that relied on the previous default. -->
+    <Using Include="System.IO" />
   </ItemGroup>
 
   <ItemGroup>

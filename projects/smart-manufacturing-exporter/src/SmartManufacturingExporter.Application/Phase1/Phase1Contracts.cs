@@ -11,13 +11,13 @@ namespace SmartManufacturingExporter.Application.Phase1;
 
 public sealed record ActiveAssemblyScan(
     string RootAssemblyPath,
-    IReadOnlyList<TopLevelOccurrenceSnapshot> Occurrences);
+    IReadOnlyList<ComponentOccurrenceSnapshot> Occurrences);
 
 public interface IInventorPhase1Gateway
 {
     ActiveAssemblyScan? ScanActiveAssembly();
 
-    void ExportPartAsStep(
+    void ExportDocumentAsStep(
         string sourcePath,
         string outputPath,
         StepExportPrecision precision);
@@ -35,6 +35,7 @@ public interface IPhase1FileSystem
 public sealed record Phase1StartResult(
     string? ErrorMessage,
     string? RootAssemblyPath,
+    ExportHierarchyNode? HierarchyRoot,
     IReadOnlyList<ExportCandidate> Candidates,
     IReadOnlyList<ScanNotice> Notices)
 {

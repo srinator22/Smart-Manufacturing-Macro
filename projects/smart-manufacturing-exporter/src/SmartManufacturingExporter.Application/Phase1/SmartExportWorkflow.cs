@@ -28,45 +28,23 @@ public sealed class SmartExportWorkflow
         ActiveAssemblyScan? scan = gateway.ScanActiveAssembly();
         if (scan is null)
         {
-            return new(RequiredAssemblyMessage, null, [], []);
+            return new(RequiredAssemblyMessage, null, null, [], []);
         }
 
         if (string.IsNullOrWhiteSpace(scan.RootAssemblyPath))
         {
-            return new(UnsavedAssemblyMessage, null, [], []);
+            return new(UnsavedAssemblyMessage, null, null, [], []);
         }
 
         List<ScanNotice> notices = [];
-        Dictionary<string, CandidateAccumulator> candidates = new(StringComparer.OrdinalIgnoreCase);
-
-        foreach (TopLevelOccurrenceSnapshot occurrence in scan.Occurrences)
+        Dictionary<string, CandidateAccumulator> candidates = new(StringComparer.OrdinalIgnoreCase)
         {
-            if (occurrence.IsSuppressed)
-            {
-                notices.Add(new(occurrence.OccurrenceName, "Suppressed"));
-                continue;
-            }
+            [scan.RootAssemblyPath] = new(scan.RootAssemblyPath, ComponentDocumentKind.Assembly),
+        };
 
-            if (occurrence.DocumentKind != ComponentDocumentKind.Part)
-            {
-                notices.Add(new(occurrence.OccurrenceName, "Not a top-level part"));
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(occurrence.SourcePath))
-            {
-                notices.Add(new(occurrence.OccurrenceName, "Part has no resolved source path"));
-                continue;
-            }
-
-            if (candidates.TryGetValue(occurrence.SourcePath, out CandidateAccumulator? candidate))
-            {
-                candidate.Quantity++;
-            }
-            else
-            {
-                candidates.Add(occurrence.SourcePath, new(occurrence.SourcePath));
-            }
+        foreach (ComponentOccurrenceSnapshot occurrence in scan.Occurrences)
+        {
+            Accumulate(occurrence, candidates, notices);
         }
 
         ExportCandidate[] orderedCandidates = candidates.Values
@@ -75,11 +53,63 @@ public sealed class SmartExportWorkflow
             .ThenBy(candidate => candidate.SourcePath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return new(null, scan.RootAssemblyPath, orderedCandidates, notices);
+        ExportHierarchyNode hierarchy = new(
+            "root",
+            Path.GetFileName(scan.RootAssemblyPath),
+            scan.RootAssemblyPath,
+            ComponentDocumentKind.Assembly,
+            1,
+            scan.Occurrences
+                .Select((occurrence, index) => BuildHierarchyNode(occurrence, $"root/{index}", candidates))
+                .Where(node => node is not null)
+                .Select(node => node!)
+                .ToArray());
+
+        return new(null, scan.RootAssemblyPath, hierarchy, orderedCandidates, notices);
+    }
+
+    public static IReadOnlyList<ExportCandidate> GetCandidatesForScope(
+        Phase1StartResult session,
+        ExportScopeMode scope)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (!Enum.IsDefined(scope))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scope), scope, "The export scope is unsupported.");
+        }
+
+        if (!session.IsSuccess || session.HierarchyRoot is null)
+        {
+            return [];
+        }
+
+        HashSet<string> eligiblePaths = new(StringComparer.OrdinalIgnoreCase);
+        switch (scope)
+        {
+            case ExportScopeMode.TopLevelOnly:
+                AddMatching(session.HierarchyRoot.Children, ComponentDocumentKind.Part, eligiblePaths, recurse: false);
+                break;
+            case ExportScopeMode.PartsRecursive:
+                AddMatching(session.HierarchyRoot.Children, ComponentDocumentKind.Part, eligiblePaths, recurse: true);
+                break;
+            case ExportScopeMode.AssembliesOnly:
+                eligiblePaths.Add(session.HierarchyRoot.SourcePath!);
+                AddMatching(session.HierarchyRoot.Children, ComponentDocumentKind.Assembly, eligiblePaths, recurse: true);
+                break;
+            case ExportScopeMode.AssembliesAndParts:
+                eligiblePaths.Add(session.HierarchyRoot.SourcePath!);
+                AddMatching(session.HierarchyRoot.Children, null, eligiblePaths, recurse: true);
+                break;
+        }
+
+        return session.Candidates
+            .Where(candidate => eligiblePaths.Contains(candidate.SourcePath))
+            .ToArray();
     }
 
     public StepExportPlan BuildStepPlan(
         Phase1StartResult session,
+        ExportScopeMode scope,
         IEnumerable<string> selectedSourcePaths,
         string destinationDirectory,
         StepExportPrecision precision)
@@ -91,7 +121,21 @@ public sealed class SmartExportWorkflow
         ValidateStepPrecision(precision, issues);
         ValidateDestination(destinationDirectory, issues);
 
-        Dictionary<string, ExportCandidate> candidatesByPath = session.Candidates.ToDictionary(
+        IReadOnlyList<ExportCandidate> scopedCandidates;
+        try
+        {
+            scopedCandidates = GetCandidatesForScope(session, scope);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            scopedCandidates = [];
+            issues.Add(new(
+                "UnsupportedExportScope",
+                $"The export scope '{scope}' is unsupported. Choose a listed scope.",
+                ValidationSeverity.Error));
+        }
+
+        Dictionary<string, ExportCandidate> candidatesByPath = scopedCandidates.ToDictionary(
             candidate => candidate.SourcePath,
             StringComparer.OrdinalIgnoreCase);
         HashSet<string> selectedPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -102,7 +146,7 @@ public sealed class SmartExportWorkflow
             {
                 issues.Add(new(
                     "UnknownSelection",
-                    $"The selected source is not part of this scan: '{sourcePath}'. Refresh the scan and select an available part.",
+                    $"The selected source is not available in the current export scope: '{sourcePath}'. Refresh the scan or change the scope.",
                     ValidationSeverity.Error));
                 continue;
             }
@@ -114,7 +158,7 @@ public sealed class SmartExportWorkflow
         {
             issues.Add(new(
                 "NoSelection",
-                "Select at least one scanned part before building a STEP export plan.",
+                "Select at least one available document before building a STEP export plan.",
                 ValidationSeverity.Error));
         }
 
@@ -123,7 +167,7 @@ public sealed class SmartExportWorkflow
 
         if (!string.IsNullOrWhiteSpace(destinationDirectory))
         {
-            foreach (ExportCandidate candidate in session.Candidates.Where(candidate => selectedPaths.Contains(candidate.SourcePath)))
+            foreach (ExportCandidate candidate in scopedCandidates.Where(candidate => selectedPaths.Contains(candidate.SourcePath)))
             {
                 string outputPath = Path.Combine(
                     destinationDirectory,
@@ -178,7 +222,7 @@ public sealed class SmartExportWorkflow
                     continue;
                 }
 
-                gateway.ExportPartAsStep(item.SourcePath, item.OutputPath, plan.Precision);
+                gateway.ExportDocumentAsStep(item.SourcePath, item.OutputPath, plan.Precision);
                 results.Add(new(item.SourcePath, item.OutputPath, true, null));
             }
             catch (Exception exception)
@@ -232,11 +276,93 @@ public sealed class SmartExportWorkflow
         }
     }
 
-    private sealed class CandidateAccumulator(string sourcePath)
+    private static void Accumulate(
+        ComponentOccurrenceSnapshot occurrence,
+        Dictionary<string, CandidateAccumulator> candidates,
+        List<ScanNotice> notices)
+    {
+        if (occurrence.IsSuppressed)
+        {
+            notices.Add(new(occurrence.OccurrenceName, "Suppressed"));
+            return;
+        }
+
+        if (occurrence.DocumentKind is not (ComponentDocumentKind.Part or ComponentDocumentKind.Assembly))
+        {
+            notices.Add(new(occurrence.OccurrenceName, "Unsupported document type"));
+        }
+        else if (string.IsNullOrWhiteSpace(occurrence.SourcePath))
+        {
+            notices.Add(new(occurrence.OccurrenceName, "Document has no resolved source path"));
+        }
+        else if (candidates.TryGetValue(occurrence.SourcePath, out CandidateAccumulator? candidate))
+        {
+            candidate.Quantity++;
+        }
+        else
+        {
+            candidates.Add(occurrence.SourcePath, new(occurrence.SourcePath, occurrence.DocumentKind));
+        }
+
+        foreach (ComponentOccurrenceSnapshot child in occurrence.Children)
+        {
+            Accumulate(child, candidates, notices);
+        }
+    }
+
+    private static ExportHierarchyNode? BuildHierarchyNode(
+        ComponentOccurrenceSnapshot occurrence,
+        string nodeId,
+        IReadOnlyDictionary<string, CandidateAccumulator> candidates)
+    {
+        if (occurrence.IsSuppressed)
+        {
+            return null;
+        }
+
+        int quantity = occurrence.SourcePath is not null && candidates.TryGetValue(occurrence.SourcePath, out CandidateAccumulator? candidate)
+            ? candidate.Quantity
+            : 0;
+        return new(
+            nodeId,
+            occurrence.OccurrenceName,
+            occurrence.SourcePath,
+            occurrence.DocumentKind,
+            quantity,
+            occurrence.Children
+                .Select((child, index) => BuildHierarchyNode(child, $"{nodeId}/{index}", candidates))
+                .Where(child => child is not null)
+                .Select(child => child!)
+                .ToArray());
+    }
+
+    private static void AddMatching(
+        IEnumerable<ExportHierarchyNode> nodes,
+        ComponentDocumentKind? kind,
+        HashSet<string> paths,
+        bool recurse)
+    {
+        foreach (ExportHierarchyNode node in nodes)
+        {
+            if (node.SourcePath is not null &&
+                node.DocumentKind is ComponentDocumentKind.Part or ComponentDocumentKind.Assembly &&
+                (kind is null || node.DocumentKind == kind))
+            {
+                paths.Add(node.SourcePath);
+            }
+
+            if (recurse)
+            {
+                AddMatching(node.Children, kind, paths, recurse: true);
+            }
+        }
+    }
+
+    private sealed class CandidateAccumulator(string sourcePath, ComponentDocumentKind documentKind)
     {
         public int Quantity { get; set; } = 1;
 
         public ExportCandidate ToExportCandidate() =>
-            new(sourcePath, Path.GetFileName(sourcePath), Quantity);
+            new(sourcePath, Path.GetFileName(sourcePath), Quantity, documentKind);
     }
 }

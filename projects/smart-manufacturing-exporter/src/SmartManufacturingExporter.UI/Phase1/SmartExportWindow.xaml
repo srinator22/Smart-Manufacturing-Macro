@@ -1,6 +1,7 @@
 <Window x:Class="SmartManufacturingExporter.UI.Phase1.SmartExportWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:SmartManufacturingExporter.UI.Phase1"
         Title="Smart Export"
         Width="880"
         Height="560"
@@ -10,6 +11,25 @@
         ShowInTaskbar="False"
         Icon="/SmartManufacturingExporter.UI;component/Assets/smart-export-32.png">
     <Grid Margin="18">
+        <Grid.Resources>
+            <HierarchicalDataTemplate DataType="{x:Type local:SmartExportTreeNodeViewModel}"
+                                      ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <CheckBox Margin="0,0,8,0"
+                              VerticalAlignment="Center"
+                              IsEnabled="{Binding CanSelect}"
+                              IsThreeState="True"
+                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                    <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="DimGray" Text="{Binding DocumentKind, StringFormat='[{0}]'}" />
+                    <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="DimGray" Text="{Binding Quantity, StringFormat='Qty {0}'}" />
+                    <TextBlock Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="DimGray"
+                               Text="{Binding SourcePath}" />
+                </StackPanel>
+            </HierarchicalDataTemplate>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -24,26 +44,32 @@
             <TextBlock Text="{Binding RootAssemblyPath}" TextWrapping="Wrap" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Width="92" Padding="8,4" Click="SelectAll_Click" Content="Select All" />
-            <Button Width="92" Margin="8,0,0,0" Padding="8,4" Click="SelectNone_Click" Content="Select None" />
-        </StackPanel>
+        <DockPanel Grid.Row="1" Margin="0,0,0,8">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <TextBlock x:Name="ScopeLabel" Margin="0,0,8,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="Export scope" />
+                <ComboBox Width="180"
+                          ItemsSource="{Binding ScopeOptions}"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValuePath="Mode"
+                          SelectedValue="{Binding SelectedScope, Mode=TwoWay}"
+                          AutomationProperties.Name="Export scope"
+                          AutomationProperties.LabeledBy="{Binding ElementName=ScopeLabel}" />
+            </StackPanel>
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button Width="88" Padding="8,4" Click="SelectAll_Click" Content="Select All" />
+                <Button Width="88" Margin="8,0,0,0" Padding="8,4" Click="SelectNone_Click" Content="Select None" />
+                <Button Width="88" Margin="8,0,0,0" Padding="8,4" Click="ExpandAll_Click" Content="Expand All" />
+                <Button Width="88" Margin="8,0,0,0" Padding="8,4" Click="CollapseAll_Click" Content="Collapse All" />
+            </StackPanel>
+        </DockPanel>
 
-        <DataGrid Grid.Row="2"
-                  ItemsSource="{Binding Rows}"
-                  AutoGenerateColumns="False"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  IsReadOnly="False"
-                  HeadersVisibility="Column"
-                  SelectionMode="Single">
-            <DataGrid.Columns>
-                <DataGridCheckBoxColumn Width="70" Header="Export" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" />
-                <DataGridTextColumn Width="220" Header="File" Binding="{Binding DisplayName}" IsReadOnly="True" />
-                <DataGridTextColumn Width="90" Header="Quantity" Binding="{Binding Quantity}" IsReadOnly="True" />
-                <DataGridTextColumn Width="*" MinWidth="280" Header="Source" Binding="{Binding SourcePath}" IsReadOnly="True" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <TreeView Grid.Row="2" ItemsSource="{Binding RootNodes}">
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                </Style>
+            </TreeView.ItemContainerStyle>
+        </TreeView>
 
         <Grid Grid.Row="3" Margin="0,14,0,12">
             <Grid.RowDefinitions>

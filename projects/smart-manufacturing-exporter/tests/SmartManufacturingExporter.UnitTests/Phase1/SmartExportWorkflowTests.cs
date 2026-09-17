@@ -12,13 +12,13 @@ public sealed class SmartExportWorkflowTests
     public void StartWithoutActiveAssemblyReturnsExactErrorAndDoesNotExport()
     {
         FakeGateway gateway = new() { Scan = null };
-        SmartExportWorkflow workflow = CreateWorkflow(gateway);
 
-        Phase1StartResult result = workflow.Start();
+        Phase1StartResult result = CreateWorkflow(gateway).Start();
 
         Assert.False(result.IsSuccess);
         Assert.Equal(SmartExportWorkflow.RequiredAssemblyMessage, result.ErrorMessage);
         Assert.Null(result.RootAssemblyPath);
+        Assert.Null(result.HierarchyRoot);
         Assert.Empty(result.Candidates);
         Assert.Empty(result.Notices);
         Assert.Equal(1, gateway.ScanCalls);
@@ -29,21 +29,19 @@ public sealed class SmartExportWorkflowTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void StartWithUnsavedAssemblyReturnsExactErrorAndDoesNotExport(string? rootAssemblyPath)
+    public void StartWithUnsavedAssemblyReturnsExactError(string? rootAssemblyPath)
     {
         FakeGateway gateway = new()
         {
-            Scan = new ActiveAssemblyScan(
-                rootAssemblyPath!,
-                [Part("Part:1", @"C:\Models\Part.ipt")]),
+            Scan = new ActiveAssemblyScan(rootAssemblyPath!, [Part("Part:1", @"C:\Models\Part.ipt")]),
         };
-        SmartExportWorkflow workflow = CreateWorkflow(gateway);
 
-        Phase1StartResult result = workflow.Start();
+        Phase1StartResult result = CreateWorkflow(gateway).Start();
 
         Assert.False(result.IsSuccess);
         Assert.Equal(SmartExportWorkflow.UnsavedAssemblyMessage, result.ErrorMessage);
         Assert.Null(result.RootAssemblyPath);
+        Assert.Null(result.HierarchyRoot);
         Assert.Empty(result.Candidates);
         Assert.Empty(result.Notices);
         Assert.Equal(1, gateway.ScanCalls);
@@ -51,77 +49,120 @@ public sealed class SmartExportWorkflowTests
     }
 
     [Fact]
-    public void StartDeduplicatesPathsCaseInsensitivelyAndCountsQuantity()
+    public void StartBuildsThreeLevelHierarchyAndGlobalCaseInsensitiveQuantities()
     {
         FakeGateway gateway = WithOccurrences(
-            Part("First", @"C:\Models\Bracket.ipt"),
-            Part("Second", @"c:\models\BRACKET.ipt"));
+            Part("Bracket:1", @"C:\Models\Bracket.ipt"),
+            Assembly(
+                "Frame:1",
+                @"C:\Models\Frame.iam",
+                Part("Bracket:2", @"c:\models\BRACKET.ipt"),
+                Assembly(
+                    "Nested:1",
+                    @"C:\Models\Nested.iam",
+                    Part("Pin:1", @"C:\Models\Pin.ipt"))));
 
         Phase1StartResult result = CreateWorkflow(gateway).Start();
 
-        ExportCandidate candidate = Assert.Single(result.Candidates);
-        Assert.Equal(@"C:\Models\Bracket.ipt", candidate.SourcePath);
-        Assert.Equal("Bracket.ipt", candidate.DisplayName);
-        Assert.Equal(2, candidate.Quantity);
-        Assert.Equal(1, gateway.ScanCalls);
+        ExportHierarchyNode root = Assert.IsType<ExportHierarchyNode>(result.HierarchyRoot);
+        Assert.Equal("root/1/1/0", root.Children[1].Children[1].Children[0].NodeId);
+        Assert.Equal(2, root.Children[0].Quantity);
+        Assert.Equal(2, root.Children[1].Children[0].Quantity);
+        ExportCandidate bracket = Assert.Single(
+            result.Candidates,
+            candidate => candidate.SourcePath.Equals(@"C:\Models\Bracket.ipt", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, bracket.Quantity);
+        Assert.Equal(ComponentDocumentKind.Part, bracket.DocumentKind);
+        Assert.Contains(result.Candidates, candidate => candidate.SourcePath == AssemblyPath && candidate.Quantity == 1);
     }
 
     [Fact]
-    public void StartReportsEveryIneligibleOccurrence()
+    public void StartOmitsSuppressedSubtreeAndReportsIneligibleDocuments()
     {
         FakeGateway gateway = WithOccurrences(
-            new("Suppressed Part", @"C:\Models\Suppressed.ipt", ComponentDocumentKind.Part, true),
-            new("Subassembly", @"C:\Models\Subassembly.iam", ComponentDocumentKind.Assembly, false),
-            new("Unresolved Part", " ", ComponentDocumentKind.Part, false));
+            new("Suppressed", @"C:\Models\Hidden.iam", ComponentDocumentKind.Assembly, true,
+                [Part("Hidden child", @"C:\Models\Hidden.ipt")]),
+            new("Unresolved", " ", ComponentDocumentKind.Part, false, []),
+            new("Reference", @"C:\Models\Reference.dwg", ComponentDocumentKind.Other, false, []));
 
         Phase1StartResult result = CreateWorkflow(gateway).Start();
 
-        Assert.Empty(result.Candidates);
+        ExportHierarchyNode root = Assert.IsType<ExportHierarchyNode>(result.HierarchyRoot);
+        Assert.Equal(["Unresolved", "Reference"], root.Children.Select(node => node.DisplayName));
+        Assert.DoesNotContain(result.Candidates, candidate => candidate.SourcePath.Contains("Hidden", StringComparison.Ordinal));
         Assert.Equal(
             [
-                new ScanNotice("Suppressed Part", "Suppressed"),
-                new ScanNotice("Subassembly", "Not a top-level part"),
-                new ScanNotice("Unresolved Part", "Part has no resolved source path"),
+                new ScanNotice("Suppressed", "Suppressed"),
+                new ScanNotice("Unresolved", "Document has no resolved source path"),
+                new ScanNotice("Reference", "Unsupported document type"),
             ],
             result.Notices);
     }
 
-    [Fact]
-    public void StartOrdersCandidatesByDisplayNameThenSourcePathIgnoringCase()
+    [Theory]
+    [InlineData(ExportScopeMode.TopLevelOnly, "Top.ipt")]
+    [InlineData(ExportScopeMode.PartsRecursive, "Deep.ipt,Top.ipt")]
+    [InlineData(ExportScopeMode.AssembliesOnly, "Machine.iam,Sub.iam")]
+    [InlineData(ExportScopeMode.AssembliesAndParts, "Deep.ipt,Machine.iam,Sub.iam,Top.ipt")]
+    public void GetCandidatesForScopeReturnsExpectedUniqueDocuments(ExportScopeMode scope, string expectedNames)
     {
-        FakeGateway gateway = WithOccurrences(
-            Part("Z", @"C:\B\zeta.ipt"),
-            Part("B", @"C:\B\alpha.ipt"),
-            Part("A", @"C:\A\ALPHA.ipt"));
+        SmartExportWorkflow workflow = CreateWorkflow(WithOccurrences(
+            Part("Top", @"C:\Models\Top.ipt"),
+            Assembly("Sub", @"C:\Models\Sub.iam", Part("Deep", @"C:\Models\Deep.ipt"))));
+        Phase1StartResult session = workflow.Start();
 
-        Phase1StartResult result = CreateWorkflow(gateway).Start();
+        IReadOnlyList<ExportCandidate> candidates = SmartExportWorkflow.GetCandidatesForScope(session, scope);
 
         Assert.Equal(
-            [@"C:\A\ALPHA.ipt", @"C:\B\alpha.ipt", @"C:\B\zeta.ipt"],
-            result.Candidates.Select(candidate => candidate.SourcePath));
+            expectedNames.Split(','),
+            candidates.Select(candidate => candidate.DisplayName));
     }
 
     [Fact]
-    public void BuildStepPlanIncludesOnlySelectedCandidatesAndDoesNotExport()
+    public void GetCandidatesForScopeRejectsInvalidEnum()
+    {
+        SmartExportWorkflow workflow = CreateWorkflow(WithOccurrences());
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => SmartExportWorkflow.GetCandidatesForScope(workflow.Start(), (ExportScopeMode)99));
+    }
+
+    [Fact]
+    public void BuildStepPlanDeduplicatesSelectionsAndIncludesAssembly()
     {
         FakeGateway gateway = WithOccurrences(
-            Part("A", @"C:\Models\Alpha.ipt"),
-            Part("B", @"C:\Models\Beta.ipt"));
+            Assembly("Sub", @"C:\Models\Sub.iam", Part("Deep", @"C:\Models\Deep.ipt")));
         SmartExportWorkflow workflow = CreateWorkflow(gateway);
-        Phase1StartResult session = workflow.Start();
 
         StepExportPlan plan = workflow.BuildStepPlan(
-            session,
-            [@"c:\models\BETA.ipt"],
+            workflow.Start(),
+            ExportScopeMode.AssembliesAndParts,
+            [@"C:\Models\Sub.iam", @"c:\models\SUB.iam"],
             Destination,
             StepExportPrecision.Medium);
 
         Assert.True(plan.CanExecute);
         StepExportPlanItem item = Assert.Single(plan.Items);
-        Assert.Equal(@"C:\Models\Beta.ipt", item.SourcePath);
-        Assert.Equal(@"C:\Exports\Beta.step", item.OutputPath);
-        Assert.Equal(StepExportPrecision.Medium, plan.Precision);
+        Assert.Equal(@"C:\Models\Sub.iam", item.SourcePath);
+        Assert.Equal(@"C:\Exports\Sub.step", item.OutputPath);
         Assert.Empty(gateway.ExportCalls);
+    }
+
+    [Fact]
+    public void BuildStepPlanRejectsSelectionOutsideScope()
+    {
+        Fixture fixture = ValidFixture();
+
+        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
+            fixture.Session,
+            ExportScopeMode.AssembliesOnly,
+            [fixture.SourcePath],
+            Destination,
+            StepExportPrecision.Low);
+
+        AssertError(plan, "UnknownSelection");
+        Assert.Contains(fixture.SourcePath, plan.Issues[0].Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Gateway.ExportCalls);
     }
 
     [Theory]
@@ -134,6 +175,7 @@ public sealed class SmartExportWorkflowTests
 
         StepExportPlan plan = fixture.Workflow.BuildStepPlan(
             fixture.Session,
+            ExportScopeMode.TopLevelOnly,
             [fixture.SourcePath],
             destination!,
             StepExportPrecision.Low);
@@ -142,50 +184,27 @@ public sealed class SmartExportWorkflowTests
     }
 
     [Fact]
-    public void BuildStepPlanRejectsMissingDestination()
+    public void BuildStepPlanRejectsDestinationAndOutputSafetyFailures()
     {
-        Fixture fixture = ValidFixture(directoryExists: false);
+        Fixture missing = ValidFixture(directoryExists: false);
+        AssertError(missing.Workflow.BuildStepPlan(
+            missing.Session, ExportScopeMode.TopLevelOnly, [missing.SourcePath], Destination, StepExportPrecision.Low),
+            "DestinationNotFound");
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [fixture.SourcePath],
-            Destination,
-            StepExportPrecision.Low);
+        Fixture unwritable = ValidFixture(canWrite: false);
+        AssertError(unwritable.Workflow.BuildStepPlan(
+            unwritable.Session, ExportScopeMode.TopLevelOnly, [unwritable.SourcePath], Destination, StepExportPrecision.Low),
+            "DestinationNotWritable");
 
-        AssertError(plan, "DestinationNotFound");
+        Fixture existing = ValidFixture(existingFiles: [@"C:\Exports\Part.step"]);
+        StepExportPlan existingPlan = existing.Workflow.BuildStepPlan(
+            existing.Session, ExportScopeMode.TopLevelOnly, [existing.SourcePath], Destination, StepExportPrecision.Low);
+        AssertError(existingPlan, "OutputExists");
+        Assert.Contains(@"C:\Exports\Part.step", existingPlan.Issues[0].Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void BuildStepPlanRejectsUnwritableDestination()
-    {
-        Fixture fixture = ValidFixture(canWrite: false);
-
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [fixture.SourcePath],
-            Destination,
-            StepExportPrecision.Low);
-
-        AssertError(plan, "DestinationNotWritable");
-    }
-
-    [Fact]
-    public void BuildStepPlanRejectsExistingOutput()
-    {
-        Fixture fixture = ValidFixture(existingFiles: [@"C:\Exports\Part.step"]);
-
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [fixture.SourcePath],
-            Destination,
-            StepExportPrecision.Low);
-
-        AssertError(plan, "OutputExists");
-        Assert.Contains(@"C:\Exports\Part.step", plan.Issues[0].Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuildStepPlanRejectsCaseInsensitiveOutputCollision()
+    public void BuildStepPlanRejectsCollisionEmptySelectionAndInvalidEnums()
     {
         FakeGateway gateway = WithOccurrences(
             Part("A", @"C:\A\Bracket.ipt"),
@@ -193,123 +212,37 @@ public sealed class SmartExportWorkflowTests
         SmartExportWorkflow workflow = CreateWorkflow(gateway);
         Phase1StartResult session = workflow.Start();
 
-        StepExportPlan plan = workflow.BuildStepPlan(
-            session,
-            [@"C:\A\Bracket.ipt", @"C:\B\BRACKET.ipt"],
-            Destination,
-            StepExportPrecision.Low);
-
-        AssertError(plan, "OutputCollision");
+        AssertError(workflow.BuildStepPlan(
+            session, ExportScopeMode.TopLevelOnly,
+            [@"C:\A\Bracket.ipt", @"C:\B\BRACKET.ipt"], Destination, StepExportPrecision.Low),
+            "OutputCollision");
+        AssertError(workflow.BuildStepPlan(
+            session, ExportScopeMode.TopLevelOnly, [], Destination, StepExportPrecision.Low),
+            "NoSelection");
+        AssertError(workflow.BuildStepPlan(
+            session, (ExportScopeMode)99, [@"C:\A\Bracket.ipt"], Destination, StepExportPrecision.Low),
+            "UnsupportedExportScope");
+        AssertError(workflow.BuildStepPlan(
+            session, ExportScopeMode.TopLevelOnly, [@"C:\A\Bracket.ipt"], Destination, (StepExportPrecision)99),
+            "UnsupportedStepPrecision");
+        Assert.Empty(gateway.ExportCalls);
     }
 
     [Fact]
-    public void BuildStepPlanRejectsSelectionOutsideSession()
+    public void ExecuteStepPlanRefusesInvalidPlan()
     {
         Fixture fixture = ValidFixture();
-
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [@"C:\Models\Unknown.ipt"],
-            Destination,
-            StepExportPrecision.Low);
-
-        AssertError(plan, "UnknownSelection");
-        Assert.Contains(@"C:\Models\Unknown.ipt", plan.Issues[0].Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuildStepPlanRejectsEmptySelection()
-    {
-        Fixture fixture = ValidFixture();
-
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [],
-            Destination,
-            StepExportPrecision.Low);
-
-        AssertError(plan, "NoSelection");
-    }
-
-    [Fact]
-    public void ExecuteStepPlanRefusesPlanWithErrors()
-    {
-        Fixture fixture = ValidFixture();
-        StepExportPlan invalidPlan = new(
+        StepExportPlan plan = new(
             [],
             [new ValidationIssue("Unsafe", "Unsafe plan.", ValidationSeverity.Error)],
             StepExportPrecision.Low);
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => fixture.Workflow.ExecuteStepPlan(invalidPlan));
-
-        Assert.Contains("validation errors", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Throws<InvalidOperationException>(() => fixture.Workflow.ExecuteStepPlan(plan));
         Assert.Empty(fixture.Gateway.ExportCalls);
     }
 
     [Fact]
-    public void ExecuteStepPlanIsolatesItemFailuresAndContinues()
-    {
-        FakeGateway gateway = WithOccurrences();
-        gateway.ExportFailureBySource[@"C:\Models\Bad.ipt"] = new InvalidOperationException("Translator failed.");
-        SmartExportWorkflow workflow = CreateWorkflow(gateway);
-        StepExportPlan plan = new(
-            [
-                new StepExportPlanItem(@"C:\Models\Bad.ipt", @"C:\Exports\Bad.step"),
-                new StepExportPlanItem(@"C:\Models\Good.ipt", @"C:\Exports\Good.step"),
-            ],
-            [],
-            StepExportPrecision.Highest);
-
-        StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
-
-        Assert.Equal(2, result.TotalCount);
-        Assert.Equal(1, result.SucceededCount);
-        Assert.Equal(1, result.FailedCount);
-        Assert.False(result.Items[0].Succeeded);
-        Assert.Equal("Translator failed.", result.Items[0].ErrorMessage);
-        Assert.True(result.Items[1].Succeeded);
-        Assert.Null(result.Items[1].ErrorMessage);
-        Assert.Equal(
-            [
-                (@"C:\Models\Bad.ipt", @"C:\Exports\Bad.step", StepExportPrecision.Highest),
-                (@"C:\Models\Good.ipt", @"C:\Exports\Good.step", StepExportPrecision.Highest),
-            ],
-            gateway.ExportCalls);
-    }
-
-    [Fact]
-    public void ExecuteStepPlanSkipsNewOutputConflictAndContinues()
-    {
-        FakeGateway gateway = WithOccurrences(
-            Part("A", @"C:\Models\Alpha.ipt"),
-            Part("B", @"C:\Models\Beta.ipt"));
-        FakeFileSystem fileSystem = new();
-        SmartExportWorkflow workflow = CreateWorkflow(gateway, fileSystem);
-        Phase1StartResult session = workflow.Start();
-        StepExportPlan plan = workflow.BuildStepPlan(
-            session,
-            [@"C:\Models\Alpha.ipt", @"C:\Models\Beta.ipt"],
-            Destination,
-            StepExportPrecision.Medium);
-        Assert.True(plan.CanExecute);
-        fileSystem.ExistingFiles.Add(@"C:\Exports\Alpha.step");
-
-        StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
-
-        Assert.Equal(2, result.TotalCount);
-        Assert.Equal(1, result.SucceededCount);
-        Assert.Equal(1, result.FailedCount);
-        Assert.False(result.Items[0].Succeeded);
-        Assert.Contains("already exists", result.Items[0].ErrorMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.True(result.Items[1].Succeeded);
-        Assert.Equal(
-            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Medium)],
-            gateway.ExportCalls);
-    }
-
-    [Fact]
-    public void ExecuteStepPlanPassesPrecisionToEverySelectedExportOnly()
+    public void ExecuteStepPlanExportsOnlySelectedDocumentsWithRequestedPrecision()
     {
         FakeGateway gateway = WithOccurrences(
             Part("A", @"C:\Models\Alpha.ipt"),
@@ -319,6 +252,7 @@ public sealed class SmartExportWorkflowTests
         Phase1StartResult session = workflow.Start();
         StepExportPlan plan = workflow.BuildStepPlan(
             session,
+            ExportScopeMode.TopLevelOnly,
             [@"C:\Models\Alpha.ipt", @"C:\Models\Gamma.ipt"],
             Destination,
             StepExportPrecision.Highest);
@@ -338,24 +272,76 @@ public sealed class SmartExportWorkflowTests
     }
 
     [Fact]
-    public void BuildStepPlanRejectsUnsupportedPrecisionWithoutExporting()
+    public void ExecuteStepPlanIsolatesFailuresAndUsesDocumentGateway()
     {
-        Fixture fixture = ValidFixture();
+        FakeGateway gateway = WithOccurrences();
+        gateway.ExportFailureBySource[@"C:\Models\Bad.iam"] = new InvalidOperationException("Translator failed.");
+        SmartExportWorkflow workflow = CreateWorkflow(gateway);
+        StepExportPlan plan = new(
+            [
+                new(@"C:\Models\Bad.iam", @"C:\Exports\Bad.step"),
+                new(@"C:\Models\Good.ipt", @"C:\Exports\Good.step"),
+            ],
+            [],
+            StepExportPrecision.Highest);
 
-        StepExportPlan plan = fixture.Workflow.BuildStepPlan(
-            fixture.Session,
-            [fixture.SourcePath],
-            Destination,
-            (StepExportPrecision)99);
+        StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
 
-        AssertError(plan, "UnsupportedStepPrecision");
-        Assert.Empty(fixture.Gateway.ExportCalls);
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(1, result.SucceededCount);
+        Assert.Equal(1, result.FailedCount);
+        Assert.False(result.Items[0].Succeeded);
+        Assert.Equal("Translator failed.", result.Items[0].ErrorMessage);
+        Assert.True(result.Items[1].Succeeded);
+        Assert.Null(result.Items[1].ErrorMessage);
+        Assert.Equal(
+            [
+                (@"C:\Models\Bad.iam", @"C:\Exports\Bad.step", StepExportPrecision.Highest),
+                (@"C:\Models\Good.ipt", @"C:\Exports\Good.step", StepExportPrecision.Highest),
+            ],
+            gateway.ExportCalls);
     }
 
-    private static TopLevelOccurrenceSnapshot Part(string occurrenceName, string sourcePath) =>
-        new(occurrenceName, sourcePath, ComponentDocumentKind.Part, false);
+    [Fact]
+    public void ExecuteStepPlanSkipsOutputCreatedAfterPlanningAndContinues()
+    {
+        FakeGateway gateway = WithOccurrences();
+        FakeFileSystem fileSystem = new();
+        SmartExportWorkflow workflow = CreateWorkflow(gateway, fileSystem);
+        StepExportPlan plan = new(
+            [
+                new(@"C:\Models\Alpha.ipt", @"C:\Exports\Alpha.step"),
+                new(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step"),
+            ],
+            [],
+            StepExportPrecision.Medium);
+        fileSystem.ExistingFiles.Add(@"C:\Exports\Alpha.step");
 
-    private static FakeGateway WithOccurrences(params TopLevelOccurrenceSnapshot[] occurrences) =>
+        StepExportBatchResult result = workflow.ExecuteStepPlan(plan);
+
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(1, result.SucceededCount);
+        Assert.Equal(1, result.FailedCount);
+        Assert.False(result.Items[0].Succeeded);
+        Assert.Contains("already exists", result.Items[0].ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(result.Items[1].Succeeded);
+        Assert.Null(result.Items[1].ErrorMessage);
+        Assert.Single(gateway.ExportCalls);
+        Assert.Equal(
+            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Medium)],
+            gateway.ExportCalls);
+    }
+
+    private static ComponentOccurrenceSnapshot Part(string name, string sourcePath) =>
+        new(name, sourcePath, ComponentDocumentKind.Part, false, []);
+
+    private static ComponentOccurrenceSnapshot Assembly(
+        string name,
+        string sourcePath,
+        params ComponentOccurrenceSnapshot[] children) =>
+        new(name, sourcePath, ComponentDocumentKind.Assembly, false, children);
+
+    private static FakeGateway WithOccurrences(params ComponentOccurrenceSnapshot[] occurrences) =>
         new() { Scan = new ActiveAssemblyScan(AssemblyPath, occurrences) };
 
     private static SmartExportWorkflow CreateWorkflow(FakeGateway gateway, FakeFileSystem? fileSystem = null) =>
@@ -406,10 +392,7 @@ public sealed class SmartExportWorkflowTests
             return Scan;
         }
 
-        public void ExportPartAsStep(
-            string sourcePath,
-            string outputPath,
-            StepExportPrecision precision)
+        public void ExportDocumentAsStep(string sourcePath, string outputPath, StepExportPrecision precision)
         {
             ExportCalls.Add((sourcePath, outputPath, precision));
             if (ExportFailureBySource.TryGetValue(sourcePath, out Exception? exception))

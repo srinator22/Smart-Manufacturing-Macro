@@ -14,13 +14,34 @@ public enum ComponentDocumentKind
     Other,
 }
 
-public sealed record TopLevelOccurrenceSnapshot(
+public sealed record ComponentOccurrenceSnapshot(
     string OccurrenceName,
     string? SourcePath,
     ComponentDocumentKind DocumentKind,
-    bool IsSuppressed);
+    bool IsSuppressed,
+    IReadOnlyList<ComponentOccurrenceSnapshot> Children);
 
-public sealed record ExportCandidate(string SourcePath, string DisplayName, int Quantity);
+public enum ExportScopeMode
+{
+    TopLevelOnly,
+    PartsRecursive,
+    AssembliesOnly,
+    AssembliesAndParts,
+}
+
+public sealed record ExportCandidate(
+    string SourcePath,
+    string DisplayName,
+    int Quantity,
+    ComponentDocumentKind DocumentKind);
+
+public sealed record ExportHierarchyNode(
+    string NodeId,
+    string DisplayName,
+    string? SourcePath,
+    ComponentDocumentKind DocumentKind,
+    int Quantity,
+    IReadOnlyList<ExportHierarchyNode> Children);
 
 public sealed record ScanNotice(string OccurrenceName, string Reason);
 
