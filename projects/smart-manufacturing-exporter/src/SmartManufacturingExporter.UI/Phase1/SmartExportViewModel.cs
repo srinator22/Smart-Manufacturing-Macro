@@ -23,6 +23,12 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
             StepExportPrecision.Highest,
         ]);
 
+    private static readonly IReadOnlyList<ExportScopeOption> ScopeOptionsList =
+        Array.AsReadOnly(
+            Enum.GetValues<ExportScopeMode>()
+                .Select(scope => new ExportScopeOption(scope, DescribeScope(scope)))
+                .ToArray());
+
     private readonly SmartExportWorkflow workflow;
     private readonly Phase1StartResult session;
     private string destinationDirectory = string.Empty;
@@ -53,7 +59,7 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
 
     public SmartExportTreeNodeViewModel RootNode { get; private set; } = null!;
 
-    public IReadOnlyList<ExportScopeMode> ScopeOptions { get; } = Enum.GetValues<ExportScopeMode>();
+    public IReadOnlyList<ExportScopeOption> ScopeOptions { get; } = ScopeOptionsList;
 
     public ExportScopeMode SelectedScope
     {
@@ -173,6 +179,15 @@ public sealed class SmartExportViewModel : INotifyPropertyChanged
             ? summary
             : $"{summary} {string.Join(" ", failureDetails)}";
     }
+
+    private static string DescribeScope(ExportScopeMode scope) => scope switch
+    {
+        ExportScopeMode.TopLevelOnly => "Top Level Only",
+        ExportScopeMode.PartsRecursive => "Parts Recursive",
+        ExportScopeMode.AssembliesOnly => "Assemblies Only",
+        ExportScopeMode.AssembliesAndParts => "Assemblies And Parts",
+        _ => throw new InvalidOperationException($"Unsupported export scope: {scope}."),
+    };
 
     private string[] SelectedSourcePaths() => RootNode
         .DescendantsAndSelf()

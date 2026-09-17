@@ -9,6 +9,13 @@
     <Resource Include="..\..\assets\smart-export-32.png" Link="Assets\smart-export-32.png" />
   </ItemGroup>
 
+  <!-- Lets the test assembly see internal members (SmartExportTreeNodeViewModel.AggregationCount) so
+       the aggregation-work-bound gate can assert on selection aggregation work without making the
+       counter public API. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartManufacturingExporter.UnitTests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>

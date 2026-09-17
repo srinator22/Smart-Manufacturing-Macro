@@ -14,7 +14,7 @@ public sealed class SmartExportViewModelTests
         Fixture fixture = CreateFixture();
 
         Assert.Equal(ExportScopeMode.PartsRecursive, fixture.ViewModel.SelectedScope);
-        Assert.Equal(Enum.GetValues<ExportScopeMode>(), fixture.ViewModel.ScopeOptions);
+        Assert.Equal(Enum.GetValues<ExportScopeMode>(), fixture.ViewModel.ScopeOptions.Select(option => option.Mode));
         Assert.Equal(@"C:\Models\Machine.iam", fixture.ViewModel.RootAssemblyPath);
         Assert.True(fixture.ViewModel.RootNode.IsSelected == true);
         Assert.False(fixture.ViewModel.RootNode.IsExportable);
@@ -190,6 +190,245 @@ public sealed class SmartExportViewModelTests
     }
 
     [Fact]
+    public void DeselectingOneOccurrenceDeselectsEveryOccurrenceOfTheSameDocument()
+    {
+        Fixture fixture = CreateFixture();
+        SmartExportTreeNodeViewModel betaOne = FindNode(fixture.ViewModel, "Beta:1");
+        SmartExportTreeNodeViewModel betaTwo = FindNode(fixture.ViewModel, "Beta:2");
+
+        betaOne.IsSelected = false;
+
+        Assert.False(betaTwo.IsSelected == true);
+        Assert.False(betaTwo.IsDocumentSelected);
+
+        fixture.ViewModel.ExportSelected();
+
+        Assert.DoesNotContain(
+            fixture.Gateway.ExportCalls,
+            call => string.Equals(call.SourcePath, @"C:\Models\Beta.ipt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SelectingOneOccurrenceSelectsEveryOccurrenceOfTheSameDocument()
+    {
+        Fixture fixture = CreateFixture();
+        fixture.ViewModel.SelectNone();
+        SmartExportTreeNodeViewModel betaOne = FindNode(fixture.ViewModel, "Beta:1");
+        SmartExportTreeNodeViewModel betaTwo = FindNode(fixture.ViewModel, "Beta:2");
+
+        betaTwo.IsSelected = true;
+
+        Assert.True(betaOne.IsSelected == true);
+        Assert.True(betaOne.IsDocumentSelected);
+
+        fixture.ViewModel.ExportSelected();
+
+        Assert.Equal(
+            [(@"C:\Models\Beta.ipt", @"C:\Exports\Beta.step", StepExportPrecision.Low)],
+            fixture.Gateway.ExportCalls);
+    }
+
+    [Fact]
+    public void DeselectingAnOccurrenceRecomputesAncestorsInEveryBranchThatSharesTheDocument()
+    {
+        CrossBranchGateway gateway = new();
+        FakeFileSystem fileSystem = new() { DirectoryExistsResult = true };
+        SmartExportWorkflow workflow = new(gateway, fileSystem);
+        Phase1StartResult session = workflow.Start();
+        SmartExportViewModel viewModel = new(workflow, session) { DestinationDirectory = Destination };
+
+        SmartExportTreeNodeViewModel left = FindNode(viewModel, "Left:1");
+        SmartExportTreeNodeViewModel right = FindNode(viewModel, "Right:1");
+        SmartExportTreeNodeViewModel sharedUnderLeft = viewModel.RootNode
+            .DescendantsAndSelf()
+            .Single(node => node.DisplayName == "Shared:1");
+        SmartExportTreeNodeViewModel sharedUnderRight = viewModel.RootNode
+            .DescendantsAndSelf()
+            .Single(node => node.DisplayName == "Shared:2");
+
+        sharedUnderLeft.IsSelected = false;
+
+        Assert.False(sharedUnderRight.IsSelected == true);
+        Assert.False(sharedUnderRight.IsDocumentSelected);
+        Assert.True(left.IsSelected == false);
+        Assert.Null(right.IsSelected);
+    }
+
+    [Fact]
+    public void TogglingOneOccurrenceOfAWidelyRepeatedDocumentStaysLinearInTreeSize()
+    {
+        const int occurrenceCount = 200;
+        const string boltPath = @"C:\Models\Bolt.ipt";
+
+        List<ExportHierarchyNode> children = [];
+        for (int i = 0; i < occurrenceCount; i++)
+        {
+            children.Add(new ExportHierarchyNode($"Bolt:{i}", $"Bolt:{i}", boltPath, ComponentDocumentKind.Part, 1, []));
+        }
+
+        // Two distinct parts alongside the repeated bolt so the root can become indeterminate once one
+        // bolt occurrence is toggled off (all-true before, mixed after).
+        children.Add(new ExportHierarchyNode("Washer:1", "Washer:1", @"C:\Models\Washer.ipt", ComponentDocumentKind.Part, 1, []));
+        children.Add(new ExportHierarchyNode("Nut:1", "Nut:1", @"C:\Models\Nut.ipt", ComponentDocumentKind.Part, 1, []));
+
+        ExportHierarchyNode root = new("Root:1", "Root:1", null, ComponentDocumentKind.Assembly, 1, children);
+        HashSet<string> exportablePaths = new(StringComparer.OrdinalIgnoreCase)
+        {
+            boltPath,
+            @"C:\Models\Washer.ipt",
+            @"C:\Models\Nut.ipt",
+        };
+
+        SmartExportTreeNodeViewModel rootNode = new(root, exportablePaths);
+        long before = rootNode.AggregationCount;
+
+        rootNode.Children[0].IsSelected = false;
+
+        long delta = rootNode.AggregationCount - before;
+
+        // AggregationCount is incremented by (1 + Children.Count) per CalculateSelection() call, so it
+        // measures element VISITS, not call entries - a per-entry-only counter cannot see this
+        // regression, since the buggy call count is already linear (~2 * occurrenceCount): the defect
+        // is O(occurrenceCount) calls to the root's CalculateSelection(), each walking all
+        // occurrenceCount+2 children. Measured on the unmodified (regressed) algorithm: 40800 at
+        // occurrenceCount=200 and 643200 at occurrenceCount=800 (ratio ~15.8, matching the ~16x
+        // expected for O(n^2)). The phased fix collapses this to one root refresh plus one
+        // RefreshSelfOnly per touched peer, a few hundred here. 6x occurrenceCount (1200) leaves
+        // generous headroom for legitimate per-node work while still failing hard on the regression.
+        // Re-baseline this bound deliberately (with evidence of the new legitimate cost), never widen
+        // it just to make a regression pass.
+        Assert.True(
+            delta <= 6 * occurrenceCount,
+            $"Expected at most {6 * occurrenceCount} aggregation element visits for {occurrenceCount} occurrences, observed {delta}.");
+    }
+
+    [Fact]
+    public void TogglingAnOccurrenceNotifiesSharedAncestorsOnceWithTheFinalValue()
+    {
+        const string sharedPath = @"C:\Models\Shared.ipt";
+        ExportHierarchyNode leftChild = new("Shared:1", "Shared:1", sharedPath, ComponentDocumentKind.Part, 1, []);
+        ExportHierarchyNode left = new("Left:1", "Left:1", @"C:\Models\Left.iam", ComponentDocumentKind.Assembly, 1, [leftChild]);
+        ExportHierarchyNode rightChild = new("Shared:2", "Shared:2", sharedPath, ComponentDocumentKind.Part, 1, []);
+        ExportHierarchyNode right = new("Right:1", "Right:1", @"C:\Models\Right.iam", ComponentDocumentKind.Assembly, 1, [rightChild]);
+        ExportHierarchyNode root = new("Root:1", "Root:1", null, ComponentDocumentKind.Assembly, 1, [left, right]);
+
+        // Only the shared part is exportable here (as in the real AssembliesAndParts scope, container
+        // assemblies with no distinct own selection state contribute nothing but their children's
+        // aggregate) so each assembly's own aggregate is driven entirely by the shared occurrence
+        // beneath it - reproducing the stale-peer interleaving the phased fix targets.
+        HashSet<string> exportablePaths = new(StringComparer.OrdinalIgnoreCase) { sharedPath };
+
+        SmartExportTreeNodeViewModel rootNode = new(root, exportablePaths);
+        SmartExportTreeNodeViewModel sharedUnderLeft = rootNode
+            .DescendantsAndSelf()
+            .Single(node => node.DisplayName == "Shared:1");
+
+        int isSelectedNotifications = 0;
+        List<bool?> observedValuesAtNotificationTime = [];
+        rootNode.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.PropertyName == nameof(SmartExportTreeNodeViewModel.IsSelected))
+            {
+                isSelectedNotifications++;
+                observedValuesAtNotificationTime.Add(rootNode.IsSelected);
+            }
+        };
+
+        sharedUnderLeft.IsSelected = false;
+
+        Assert.Equal(1, isSelectedNotifications);
+        Assert.All(observedValuesAtNotificationTime, value => Assert.Equal(rootNode.IsSelected, value));
+    }
+
+    [Fact]
+    public void TogglingARepeatedSubassemblyNotifiesEveryNodeAtMostOnceWithTheFinalValue()
+    {
+        const string subassemblyPath = @"C:\Models\Sub.iam";
+        const string partPath = @"C:\Models\X.ipt";
+
+        ExportHierarchyNode x1 = new("X1:1", "X1:1", partPath, ComponentDocumentKind.Part, 1, []);
+        ExportHierarchyNode subA = new("SubA:1", "SubA:1", subassemblyPath, ComponentDocumentKind.Assembly, 1, [x1]);
+        ExportHierarchyNode left = new("Left:1", "Left:1", @"C:\Models\Left.iam", ComponentDocumentKind.Assembly, 1, [subA]);
+        ExportHierarchyNode x2 = new("X2:1", "X2:1", partPath, ComponentDocumentKind.Part, 1, []);
+        ExportHierarchyNode subB = new("SubB:1", "SubB:1", subassemblyPath, ComponentDocumentKind.Assembly, 1, [x2]);
+        ExportHierarchyNode right = new("Right:1", "Right:1", @"C:\Models\Right.iam", ComponentDocumentKind.Assembly, 1, [subB]);
+        ExportHierarchyNode root = new("Root:1", "Root:1", null, ComponentDocumentKind.Assembly, 1, [left, right]);
+
+        // Scope AssembliesAndParts: both the repeated sub-assembly document and the repeated part
+        // document underneath it are exportable - an ordinary repeated-subassembly CAD shape, not just
+        // a repeated leaf part.
+        HashSet<string> exportablePaths = new(StringComparer.OrdinalIgnoreCase) { subassemblyPath, partPath };
+
+        SmartExportTreeNodeViewModel rootNode = new(root, exportablePaths);
+        SmartExportTreeNodeViewModel subANode = rootNode
+            .DescendantsAndSelf()
+            .Single(node => node.DisplayName == "SubA:1");
+
+        Dictionary<SmartExportTreeNodeViewModel, int> notificationCounts = [];
+        Dictionary<SmartExportTreeNodeViewModel, List<bool?>> observedValues = [];
+        Dictionary<SmartExportTreeNodeViewModel, bool?> valuesBeforeToggle = [];
+        foreach (SmartExportTreeNodeViewModel node in rootNode.DescendantsAndSelf())
+        {
+            notificationCounts[node] = 0;
+            observedValues[node] = [];
+            valuesBeforeToggle[node] = node.IsSelected;
+            node.PropertyChanged += (_, eventArgs) =>
+            {
+                if (eventArgs.PropertyName == nameof(SmartExportTreeNodeViewModel.IsSelected))
+                {
+                    notificationCounts[node]++;
+                    observedValues[node].Add(node.IsSelected);
+                }
+            };
+        }
+
+        subANode.IsSelected = false;
+
+        foreach (SmartExportTreeNodeViewModel node in rootNode.DescendantsAndSelf())
+        {
+            // Exactly once for a node whose value changed, never for one that did not. Asserting
+            // only "at most one" would pass a node that silently failed to notify at all, and would
+            // leave the published-value assertion below vacuous for it.
+            int expectedNotifications = valuesBeforeToggle[node] == node.IsSelected ? 0 : 1;
+            Assert.True(
+                notificationCounts[node] == expectedNotifications,
+                $"{node.DisplayName} raised {notificationCounts[node]} IsSelected notifications, expected {expectedNotifications} (was {valuesBeforeToggle[node]}, now {node.IsSelected}).");
+            Assert.All(
+                observedValues[node],
+                value => Assert.True(
+                    value == node.IsSelected,
+                    $"{node.DisplayName} published {value} but its final IsSelected is {node.IsSelected}."));
+        }
+    }
+
+    private sealed class CrossBranchGateway : IInventorPhase1Gateway
+    {
+        public ActiveAssemblyScan? ScanActiveAssembly() => new(
+            @"C:\Models\Machine.iam",
+            [
+                new(
+                    "Left:1",
+                    @"C:\Models\Left.iam",
+                    ComponentDocumentKind.Assembly,
+                    false,
+                    [new("Shared:1", @"C:\Models\Shared.ipt", ComponentDocumentKind.Part, false, [])]),
+                new(
+                    "Right:1",
+                    @"C:\Models\Right.iam",
+                    ComponentDocumentKind.Assembly,
+                    false,
+                    [
+                        new("Shared:2", @"C:\Models\Shared.ipt", ComponentDocumentKind.Part, false, []),
+                        new("Other:1", @"C:\Models\Other.ipt", ComponentDocumentKind.Part, false, []),
+                    ]),
+            ]);
+
+        public void ExportDocumentAsStep(string sourcePath, string outputPath, StepExportPrecision precision)
+        {
+        }
+    }
+
+    [Fact]
     public void ConstructorExposesStablePrecisionOptionsAndDefaultsToLow()
     {
         Fixture fixture = CreateFixture();
@@ -232,6 +471,22 @@ public sealed class SmartExportViewModelTests
 
         Assert.Empty(fixture.Gateway.ExportCalls);
         Assert.Contains("does not exist", fixture.ViewModel.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ScopeOptionsExposeEveryScopeModeWithADistinctDisplayName()
+    {
+        Fixture fixture = CreateFixture();
+
+        Assert.Equal(
+            Enum.GetValues<ExportScopeMode>(),
+            fixture.ViewModel.ScopeOptions.Select(option => option.Mode));
+        Assert.All(
+            fixture.ViewModel.ScopeOptions,
+            option => Assert.False(string.IsNullOrWhiteSpace(option.DisplayName)));
+        Assert.Equal(
+            fixture.ViewModel.ScopeOptions.Select(option => option.DisplayName).Distinct(StringComparer.Ordinal).Count(),
+            fixture.ViewModel.ScopeOptions.Count);
     }
 
     [Fact]
