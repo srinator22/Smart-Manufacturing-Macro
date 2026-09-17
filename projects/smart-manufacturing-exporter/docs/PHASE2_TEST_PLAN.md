@@ -27,6 +27,7 @@ Use a new empty output directory. Keep every source document saved before testin
 4. Clear Bracket and confirm its eligible descendants clear and ancestors become indeterminate.
 5. Select Bracket and confirm its eligible descendants select and ancestors recompute.
 6. Run Collapse All and Expand All and confirm every hierarchy level follows.
+7. Clear one `Plate.ipt` occurrence and confirm the other `Plate.ipt` occurrence clears too; export and confirm `Plate.step` is not produced. Then check one `Plate.ipt` occurrence and confirm both check, and export again to confirm exactly one `Plate.step` is produced.
 
 ## Scope
 

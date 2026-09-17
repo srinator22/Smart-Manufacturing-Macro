@@ -10,7 +10,7 @@ Phases 1 and 2 are ready for live Inventor testing. Compilation, automated tests
 - Requires a saved assembly to be the active document.
 - Recursively scans saved Inventor part and assembly occurrences.
 - Excludes suppressed occurrences and their descendants, unresolved documents, and unsupported document types.
-- Preserves occurrence hierarchy while deduplicating export source paths case-insensitively and showing total quantity.
+- Preserves occurrence hierarchy while deduplicating export source paths case-insensitively and showing total quantity. Selection is per source document: every occurrence of the same document shares one checkbox state, so checking or unchecking any occurrence applies to all of them and the document exports exactly once.
 - Provides Top Level Only, Parts Recursive, Assemblies Only, and Assemblies And Parts scopes.
 - Uses a tri-state tree: parent changes propagate downward and child changes update ancestors.
 - Selects all eligible documents by default and provides Select All, Select None, Expand All, and Collapse All controls.
@@ -123,7 +123,7 @@ For the first test, use sanitized CAD files outside the Git repository and choos
 
 1. Open a saved Inventor `.iam` assembly and make it the active document.
 2. Open the Smart Export ribbon tab and select Smart Export.
-3. Choose an inclusion scope and review the recursive assembly tree. Quantity is the total number of occurrences that reference the same source document.
+3. Choose an inclusion scope and review the recursive assembly tree. Quantity is the total number of occurrences that reference the same source document, and checking or unchecking any one occurrence checks or unchecks every occurrence of that document.
 4. Expand or collapse the hierarchy as needed. Use Select None and then check only the documents you want, or leave all eligible documents selected. A shaded checkbox means only part of that branch is selected.
 5. Choose STEP precision. Low preserves Inventor's documented default; Medium and Highest use progressively tighter spline-fit tolerances.
 6. Select Browse and choose an existing writable destination directory.
