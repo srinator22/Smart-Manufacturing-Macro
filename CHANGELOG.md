@@ -18,6 +18,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Archive the dead phase 1 row view model
 - Widen and enforce mutation testing
 - Record shared-document selection and open gaps
+- Archive phase 2 hierarchy task
 
 ### Fixed
 - Guard post-release changelog generation
