@@ -84,12 +84,16 @@ Entry format (all four fields required):
   for the second, tests that quote the spec rule they pin (here TASK.md
   "highest observed in the project scope + 1") so a reviewer can see when an
   assertion encodes the implementation instead.
-- what was added: the live smoke harness (.work/jobs/naming-live-smoke, local
-  only) with a cold-reopen check in a second Inventor process, and TEST_PLAN
-  section 1 documenting it; the allocator tests were rewritten to assert the
-  rule. The evidence-freshness check is not mechanized because the harness and
-  its logs are gitignored.
-- retire-when: the smoke harness or an evidence stamp is committed and the gate
-  fails when adapter or Execute sources are newer than the last recorded live
-  run.
+- what was added: the live smoke harness, committed at
+  projects/file-naming-manager/tools/FileNamingManager.LiveSmoke, with a
+  cold-reopen check in a second Inventor process; the evidence stamp it writes
+  on pass at projects/file-naming-manager/tests/live-evidence/LIVE_EVIDENCE.json,
+  hashing every InventorAdapter source, FileNamingWorkflow.cs and the harness
+  itself; projects/file-naming-manager/scripts/check-live-evidence.sh, wired
+  into that project's check.sh, which recomputes the hash and fails when the
+  recorded live run no longer matches the tree; and TEST_PLAN section 1
+  documenting the stamp and the refresh command. The allocator tests were
+  rewritten to assert the rule.
+- retire-when: the check has been in the gate for 45 days without a
+  stale-evidence miss.
 

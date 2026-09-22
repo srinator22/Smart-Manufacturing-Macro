@@ -25,7 +25,7 @@ WPF               -> UI              -> Application workflow -> Core models
 - `Core` owns the naming grammar: `FileNameParser`, `FileNameFormatter`, `NamingToken`, `ItemNumber`, `ProjectNumber`, `NumberAllocator`, `NamingReport` and the finding codes. It has no UI, filesystem, or Autodesk dependency, and it never parses a path, only a file name.
 - `Application` owns the `FileNamingWorkflow` (Analyze, Plan, Execute) and defines the ports `IInventorNamingGateway`, `INamingFileSystem` and `IClock`. It decides which files are renameable, which are Vault-managed, which are blocked, and in what order operations run.
 - `Infrastructure` implements `INamingFileSystem` over the real filesystem: project-scope enumeration excluding `OldVersions`, `_V`, `3rd Party Hardware`, `Content Center Files` and `_renamed-originals` (the archive folder itself, so an Apply's own originals never re-enter scope as duplicates on the next Analyze), `_V\<name>.v` tracker detection, moving originals, writing the manifest.
-- `InventorAdapter` is the only general project that references Inventor interop. It flattens the active assembly into COM-free `DocumentSnapshot`s and executes `SaveAs`, `Save` and Part Number writes.
+- `InventorAdapter` is the only general project that references Inventor interop. It flattens the active assembly into COM-free `DocumentSnapshot`s and executes `SaveAs`, `Save` and Part Number writes. The one sanctioned exception outside `src/` is `tools/FileNamingManager.LiveSmoke`, the live smoke harness, which drives a hidden Inventor and is never loaded by Inventor.
 - `UI` is the WPF window and view model over COM-free models.
 - `AddIn` owns the `ApplicationAddInServer`, the two ribbon buttons on the shared `WMP Custom Tools` tab, and composition.
 
@@ -62,5 +62,5 @@ All Inventor calls stay on Inventor's owning STA thread. Analysis of file names 
 
 - Core, Application and Infrastructure: deterministic unit tests including the real P124 file names as golden cases, and mutation tests with enforced thresholds.
 - UI: a render test that shows the window on an STA thread and asserts realized rows, because a view-model-only suite cannot see XAML.
-- Adapter and AddIn: compile against the installed interop; live behaviour is exercised by the temp-folder smoke harness described in `TEST_PLAN.md` and never against the Vault workspace.
+- Adapter and AddIn: compile against the installed interop; live behaviour is exercised by the temp-folder smoke harness described in `TEST_PLAN.md` and never against the Vault workspace. The harness stamps `tests/live-evidence/LIVE_EVIDENCE.json` with a hash of the Inventor-facing sources (every InventorAdapter file, `FileNamingWorkflow.cs`, and the harness itself), and `scripts/check-live-evidence.sh` fails the gate once any of those change, so adapter behaviour is never claimed by a live run that predates the code. Core and Infrastructure changes do not invalidate the stamp; they are covered by unit and mutation tests.
 - Project boundaries: architecture tests.
