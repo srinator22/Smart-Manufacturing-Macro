@@ -60,6 +60,30 @@ public class NamingReportTests
         Assert.Empty(report.ProjectFindings);
     }
 
+    /// <summary>
+    /// A drawing follows its model's number, so a companion pair is never a second owner of it and raises
+    /// no DuplicateNumber finding. But a lone drawing at 0080 still occupies 0080 in the real folder tree:
+    /// it raises the series maximum like any numbered file, so the SequenceGap finding must stop before
+    /// 80 rather than list 80 itself as missing.
+    /// </summary>
+    [Fact]
+    public void BuildReportsNoDuplicateForACompanionDrawingAndNoGapAtALoneDrawingsNumber()
+    {
+        List<ParsedFileName> scope =
+        [
+            FileNameParser.Parse("124-0001 Foo.ipt"),
+            FileNameParser.Parse("124-0001 Foo.idw"),
+            FileNameParser.Parse("124-0080 X.idw"),
+        ];
+
+        NamingReport report = NamingReport.Build(scope, Project124);
+
+        Assert.DoesNotContain(report.ProjectFindings, f => f.Code == FindingCode.DuplicateNumber);
+
+        NamingFinding gapFinding = Assert.Single(report.ProjectFindings, f => f.Code == FindingCode.SequenceGap);
+        Assert.DoesNotContain("80", gapFinding.Message);
+    }
+
     [Fact]
     public void BuildEmptyScopeProducesEmptyReport()
     {

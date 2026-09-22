@@ -95,7 +95,19 @@ public sealed record RenamePlan(
     public bool CanExecute => Blockers.Count == 0;
 }
 
-public sealed record RenameItemResult(string CurrentFullPath, string NewFullPath, bool Succeeded, string? ErrorMessage);
+/// <summary>
+/// One operation's outcome. <c>ModelRenamed</c> is the fact that matters for recovery: the model's own
+/// SaveAs either happened on disk or it did not, and a later failure in the same operation - a companion
+/// drawing, the Part Number write - cannot take it back. Such an item is a PARTIAL success:
+/// <c>ModelRenamed</c> true with <c>Succeeded</c> false, its parents still saved and its original still
+/// archived, and <c>ErrorMessage</c> naming the step that failed.
+/// </summary>
+public sealed record RenameItemResult(
+    string CurrentFullPath,
+    string NewFullPath,
+    bool Succeeded,
+    bool ModelRenamed,
+    string? ErrorMessage);
 
 /// <summary>
 /// An unsaved parent still references the old file name on disk after a failed save, so moving the

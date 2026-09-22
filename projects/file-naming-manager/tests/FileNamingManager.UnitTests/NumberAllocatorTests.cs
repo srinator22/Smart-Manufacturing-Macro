@@ -108,13 +108,53 @@ public class NumberAllocatorTests
     {
         NumberAllocator allocator = new([Part(124, 5)], Project124);
 
-        ItemNumber first = allocator.Allocate(NumberSeries.Part);
-        ItemNumber second = allocator.Allocate(NumberSeries.Part);
-        ItemNumber third = allocator.Allocate(NumberSeries.Part);
+        ItemNumber? first = allocator.Allocate(NumberSeries.Part);
+        ItemNumber? second = allocator.Allocate(NumberSeries.Part);
+        ItemNumber? third = allocator.Allocate(NumberSeries.Part);
 
-        Assert.Equal(6, first.Value);
-        Assert.Equal(7, second.Value);
-        Assert.Equal(8, third.Value);
+        Assert.Equal(6, first!.Value.Value);
+        Assert.Equal(7, second!.Value.Value);
+        Assert.Equal(8, third!.Value.Value);
+    }
+
+    /// <summary>
+    /// A project that has used every number in a series is a real, reachable state, and the allocator is
+    /// asked for a number before anything knows whether one exists. Allocating past the series maximum
+    /// used to throw out of ItemNumber's constructor and escape Analyze, so the window never opened.
+    /// </summary>
+    [Fact]
+    public void AnExhaustedPartSeriesAllocatesNothingAndReportsItselfExhausted()
+    {
+        NumberAllocator allocator = new([FileNameParser.Parse("124-9999 Last.ipt")], Project124);
+
+        Assert.True(allocator.IsExhausted(NumberSeries.Part));
+        Assert.False(allocator.IsExhausted(NumberSeries.Assembly));
+        Assert.Null(allocator.Allocate(NumberSeries.Part));
+    }
+
+    [Fact]
+    public void AnExhaustedAssemblySeriesAllocatesNothingAndReportsItselfExhausted()
+    {
+        NumberAllocator allocator = new([FileNameParser.Parse("124-A999 Last (sub-assembly).iam")], Project124);
+
+        Assert.True(allocator.IsExhausted(NumberSeries.Assembly));
+        Assert.False(allocator.IsExhausted(NumberSeries.Part));
+        Assert.Null(allocator.Allocate(NumberSeries.Assembly));
+    }
+
+    /// <summary>
+    /// The boundary itself: the series maximum is a legal number to hand out, and only the allocation
+    /// after it is refused. An off-by-one here would silently retire the last number of every project.
+    /// </summary>
+    [Fact]
+    public void TheSeriesMaximumIsStillAllocatableAndExhaustsTheSeries()
+    {
+        NumberAllocator allocator = new([FileNameParser.Parse("124-9998 Penultimate.ipt")], Project124);
+
+        Assert.False(allocator.IsExhausted(NumberSeries.Part));
+        Assert.Equal(9999, allocator.Allocate(NumberSeries.Part)!.Value.Value);
+        Assert.True(allocator.IsExhausted(NumberSeries.Part));
+        Assert.Null(allocator.Allocate(NumberSeries.Part));
     }
 
     [Fact]
@@ -138,6 +178,61 @@ public class NumberAllocatorTests
 
         Assert.Equal(1, allocator.NextNumber(NumberSeries.Part));
         Assert.Empty(allocator.OtherProjectFileNames);
+    }
+
+    /// <summary>
+    /// A drawing carries its model's number by design - '124-0001 Foo.idw' is the drawing OF
+    /// '124-0001 Foo.ipt', not a second claim on 0001. Counting it as a second owner reported a false
+    /// duplicate, which then stopped the model itself being normalized.
+    /// </summary>
+    [Fact]
+    public void ACompanionDrawingSharingItsModelsNumberIsNotADuplicate()
+    {
+        NumberAllocator allocator = new(
+            [FileNameParser.Parse("124-0001 Foo.ipt"), FileNameParser.Parse("124-0001 Foo.idw")],
+            Project124);
+
+        Assert.Empty(allocator.Duplicates(NumberSeries.Part));
+    }
+
+    /// <summary>
+    /// Every numbered token in the project scope - including a drawing or presentation whose model is
+    /// gone or out of scope - occupies its number in the real folder tree, so it must raise the series
+    /// maximum and fill the gap it sits on. It still cannot OWN the number for duplicate purposes: a lone
+    /// drawing is not a second claim on anything, because there is nothing else claiming it.
+    /// </summary>
+    [Fact]
+    public void ALoneDrawingRaisesTheMaximumAndIsNotADuplicate()
+    {
+        NumberAllocator allocator = new(
+            [FileNameParser.Parse("124-0001 A.ipt"), FileNameParser.Parse("124-0080 X.idw")],
+            Project124);
+
+        Assert.Equal(81, allocator.NextNumber(NumberSeries.Part));
+        Assert.Empty(allocator.Duplicates(NumberSeries.Part));
+        IReadOnlyList<int> gaps = allocator.Gaps(NumberSeries.Part);
+        for (int candidate = 2; candidate <= 79; candidate++)
+        {
+            Assert.Contains(candidate, gaps);
+        }
+
+        Assert.DoesNotContain(80, gaps);
+    }
+
+    /// <summary>
+    /// The complement of the companion-drawing rule: two models really do both claim the number, and
+    /// that duplicate must still be reported.
+    /// </summary>
+    [Fact]
+    public void TwoPartsSharingOneNumberStillReportTheDuplicate()
+    {
+        NumberAllocator allocator = new(
+            [FileNameParser.Parse("124-0001 Foo.ipt"), FileNameParser.Parse("124-0001 Bar.ipt")],
+            Project124);
+
+        DuplicateNumberGroup group = Assert.Single(allocator.Duplicates(NumberSeries.Part));
+        Assert.Equal(1, group.Number.Value);
+        Assert.Equal(["124-0001 Foo.ipt", "124-0001 Bar.ipt"], group.FileNames);
     }
 
     /// <summary>

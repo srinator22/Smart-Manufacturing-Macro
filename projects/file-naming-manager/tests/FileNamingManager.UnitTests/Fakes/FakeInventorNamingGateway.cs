@@ -14,6 +14,7 @@ public sealed class FakeInventorNamingGateway : IInventorNamingGateway
     private readonly Dictionary<string, Exception> renameFailures = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Exception> saveFailures = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Exception> ensureOpenFailures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Exception> setPartNumberFailures = new(StringComparer.OrdinalIgnoreCase);
 
     public ActiveAssemblySnapshot? Snapshot { get; set; }
 
@@ -38,6 +39,12 @@ public sealed class FakeInventorNamingGateway : IInventorNamingGateway
     public void FailSaveFor(string fullPath, Exception exception) => saveFailures[fullPath] = exception;
 
     public void FailEnsureOpenFor(string fullPath, Exception exception) => ensureOpenFailures[fullPath] = exception;
+
+    /// <summary>
+    /// Fails the Part Number write for one renamed document. The path is the document's NEW full path,
+    /// because Execute writes the property after the rename.
+    /// </summary>
+    public void FailSetPartNumberFor(string fullPath, Exception exception) => setPartNumberFailures[fullPath] = exception;
 
     public void EnsureDocumentOpen(string fullPath)
     {
@@ -73,6 +80,11 @@ public sealed class FakeInventorNamingGateway : IInventorNamingGateway
 
     public void SetPartNumber(string fullPath, string partNumber)
     {
+        if (setPartNumberFailures.TryGetValue(fullPath, out Exception? exception))
+        {
+            throw exception;
+        }
+
         SetPartNumberCalls.Add((fullPath, partNumber));
         CallLog.Add($"SetPartNumber:{fullPath}={partNumber}");
     }

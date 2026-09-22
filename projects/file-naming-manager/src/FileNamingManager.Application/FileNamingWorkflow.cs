@@ -15,6 +15,17 @@ public sealed class FileNamingWorkflow
 {
     public const string RequiredAssemblyMessage = "File Naming Manager requires an active, saved Inventor assembly.";
 
+    /// <summary>
+    /// The folders INamingFileSystem.EnumerateScope skips at any depth. An assembly routinely references
+    /// documents from these folders and from outside the project root altogether - Content Center parts,
+    /// 3rd Party Hardware, a part owned by another project - and those files belong to someone else: the
+    /// tool must neither rename them nor relocate their originals.
+    /// </summary>
+    private static readonly string[] ScopeExcludedFolderNames =
+        ["OldVersions", "_V", "3rd Party Hardware", "Content Center Files", "_renamed-originals"];
+
+    private static readonly char[] PathSeparators = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
+
     private readonly IInventorNamingGateway gateway;
     private readonly INamingFileSystem fileSystem;
     private readonly IClock clock;
@@ -55,7 +66,8 @@ public sealed class FileNamingWorkflow
             ? new NumberAllocator(scope.Select(entry => entry.Parsed), allocatorProject)
             : null;
 
-        List<NamingAnalysisRow> rows = [.. scan.Documents.Select(document => BuildRow(document, scan, fileSystem, allocator, effectiveProject))];
+        List<NamingAnalysisRow> rows =
+            [.. scan.Documents.Select(document => BuildRow(document, scan, fileSystem, allocator, effectiveProject, projectRoot))];
 
         return new NamingAnalysis(
             null,
@@ -97,6 +109,7 @@ public sealed class FileNamingWorkflow
 
         List<RenameOperation> operations = [];
         List<VaultRenameInstruction> vaultInstructions = [];
+        HashSet<NumberSeries> exhaustedSeriesNeeded = [];
         Dictionary<string, List<string>> targetOwners = new(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> proposedNameOwners = new(StringComparer.OrdinalIgnoreCase);
         ILookup<string, string> scopePathsByFileName = analysis.Scope.ToLookup(
@@ -109,6 +122,14 @@ public sealed class FileNamingWorkflow
             if (row.Kind is not (DocumentKind.Part or DocumentKind.Assembly))
             {
                 // Drawings and presentations are renamed only as companions of their model, below.
+                continue;
+            }
+
+            if (IsOutsideProjectScope(row.FullPath, analysis.ProjectRootPath))
+            {
+                // A Content Center part, a 3rd Party Hardware part, or a part owned by another project.
+                // Silently skipped rather than blocked: its presence is normal and must not stop the
+                // rows this project does own. BuildRow carries the reason onto the row itself.
                 continue;
             }
 
@@ -131,7 +152,13 @@ public sealed class FileNamingWorkflow
                 continue;
             }
 
-            string? proposed = TryProposeFileName(allocator, row.Parsed, row.Kind, row.IsRoot, project);
+            string? proposed = TryProposeFileName(
+                allocator, row.Parsed, row.Kind, row.IsRoot, project, out NumberSeries? exhaustedSeries);
+            if (exhaustedSeries is NumberSeries ranOut)
+            {
+                exhaustedSeriesNeeded.Add(ranOut);
+            }
+
             if (proposed is null)
             {
                 continue;
@@ -230,6 +257,17 @@ public sealed class FileNamingWorkflow
                 partNumberToSet));
         }
 
+        // Only a series something actually asked for is a blocker: a project that has filled its part
+        // series and has nothing left to rename is finished, not blocked. Enumerated in declaration
+        // order so the blocker list stays deterministic whatever order the rows came in.
+        foreach (NumberSeries series in Enum.GetValues<NumberSeries>())
+        {
+            if (exhaustedSeriesNeeded.Contains(series))
+            {
+                blockers.Add(DescribeExhaustedSeries(series, project));
+            }
+        }
+
         foreach (List<string> owners in targetOwners.Values)
         {
             if (owners.Count > 1)
@@ -270,52 +308,78 @@ public sealed class FileNamingWorkflow
         {
             if (preOpenFailures.TryGetValue(operation.CurrentFullPath, out string? preOpenError))
             {
-                results.Add(new RenameItemResult(operation.CurrentFullPath, operation.NewFullPath, false, preOpenError));
+                results.Add(new RenameItemResult(operation.CurrentFullPath, operation.NewFullPath, false, false, preOpenError));
                 continue;
             }
 
             try
             {
                 gateway.RenameDocument(operation.CurrentFullPath, operation.NewFullPath);
-
-                foreach ((string current, string @new) in operation.CompanionDrawings)
-                {
-                    gateway.RenameDocument(current, @new);
-                }
-
-                if (operation.PartNumberToSet is not null)
-                {
-                    gateway.SetPartNumber(operation.NewFullPath, operation.PartNumberToSet);
-                }
-
-                results.Add(new RenameItemResult(operation.CurrentFullPath, operation.NewFullPath, true, null));
-                renamedPaths[operation.CurrentFullPath] = operation.NewFullPath;
-
-                manifestEntries.Add(new RenameManifestEntry(
-                    operation.CurrentFullPath,
-                    ComputeArchivedPath(operation.CurrentFullPath, originalsRoot, plan.ProjectRootPath),
-                    operation.NewFullPath,
-                    false,
-                    null));
-                foreach ((string current, string @new) in operation.CompanionDrawings)
-                {
-                    manifestEntries.Add(new RenameManifestEntry(
-                        current,
-                        ComputeArchivedPath(current, originalsRoot, plan.ProjectRootPath),
-                        @new,
-                        false,
-                        null));
-                }
-
-                foreach (string parent in operation.ParentsToSave)
-                {
-                    parentsOfSuccesses.Add(parent);
-                }
             }
             catch (Exception exception)
             {
-                results.Add(new RenameItemResult(operation.CurrentFullPath, operation.NewFullPath, false, exception.Message));
+                results.Add(new RenameItemResult(operation.CurrentFullPath, operation.NewFullPath, false, false, exception.Message));
+                continue;
             }
+
+            // The model's SaveAs has landed on disk. Record it NOW - before the companion renames and
+            // the Part Number write, either of which can throw. Recording only after those steps left a
+            // renamed model untracked: its parent was never saved, so the assembly still referenced the
+            // old name, and its original was never archived (review finding T2).
+            renamedPaths[operation.CurrentFullPath] = operation.NewFullPath;
+            manifestEntries.Add(new RenameManifestEntry(
+                operation.CurrentFullPath,
+                ComputeArchivedPath(operation.CurrentFullPath, originalsRoot, plan.ProjectRootPath),
+                operation.NewFullPath,
+                false,
+                null));
+            foreach (string parent in operation.ParentsToSave)
+            {
+                parentsOfSuccesses.Add(parent);
+            }
+
+            // A companion is recorded as each rename lands, for the same reason: one that is already
+            // renamed must still be archived even when a later companion fails.
+            string? partialError = null;
+            foreach ((string current, string @new) in operation.CompanionDrawings)
+            {
+                try
+                {
+                    gateway.RenameDocument(current, @new);
+                }
+                catch (Exception exception)
+                {
+                    partialError =
+                        $"Model renamed; companion drawing '{Path.GetFileName(current)}' failed: {exception.Message}";
+                    break;
+                }
+
+                manifestEntries.Add(new RenameManifestEntry(
+                    current,
+                    ComputeArchivedPath(current, originalsRoot, plan.ProjectRootPath),
+                    @new,
+                    false,
+                    null));
+            }
+
+            if (partialError is null && operation.PartNumberToSet is not null)
+            {
+                try
+                {
+                    gateway.SetPartNumber(operation.NewFullPath, operation.PartNumberToSet);
+                }
+                catch (Exception exception)
+                {
+                    partialError = $"Model renamed; Part Number write failed: {exception.Message}";
+                }
+            }
+
+            results.Add(new RenameItemResult(
+                operation.CurrentFullPath,
+                operation.NewFullPath,
+                partialError is null,
+                true,
+                partialError));
         }
 
         List<ParentSaveFailure> parentSaveFailures = [];
@@ -362,6 +426,20 @@ public sealed class FileNamingWorkflow
         List<RenameManifestEntry> archivedEntries = [];
         foreach (RenameManifestEntry entry in manifestEntries)
         {
+            // Defense in depth behind Plan's scope guard: ComputeArchivedPath is Path.Combine over
+            // Path.GetRelativePath, which answers '..\..\x' for an original outside the project root and
+            // would walk the move straight back out of _renamed-originals. Refuse before moving.
+            if (!TryGetPathUnderRoot(entry.OriginalPath, plan.ProjectRootPath, out string _))
+            {
+                string escapeError =
+                    $"'{entry.OriginalPath}' is outside the project root '{plan.ProjectRootPath}', so archiving "
+                    + "it would move it outside '_renamed-originals'; the rename stands and the original was "
+                    + "left in place.";
+                archiveFailures.Add(new ArchiveFailure(entry.OriginalPath, escapeError));
+                archivedEntries.Add(entry with { Error = escapeError });
+                continue;
+            }
+
             try
             {
                 fileSystem.MoveToOriginals(entry.OriginalPath, originalsRoot, plan.ProjectRootPath);
@@ -413,6 +491,60 @@ public sealed class FileNamingWorkflow
 
     private static string ComputeArchivedPath(string originalFullPath, string originalsRoot, string projectRoot) =>
         Path.Combine(originalsRoot, Path.GetRelativePath(projectRoot, originalFullPath));
+
+    /// <summary>
+    /// True when the scope enumeration would never reach <paramref name="fullPath"/>: it sits outside
+    /// <paramref name="projectRoot"/> altogether, or inside one of the reserved folders. An empty root
+    /// means the caller could not determine one, and nothing is excluded then.
+    /// </summary>
+    private static bool IsOutsideProjectScope(string fullPath, string? projectRoot)
+    {
+        if (string.IsNullOrEmpty(projectRoot))
+        {
+            return false;
+        }
+
+        if (!TryGetPathUnderRoot(fullPath, projectRoot, out string relative))
+        {
+            return true;
+        }
+
+        string[] segments = relative.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < segments.Length - 1; i++)
+        {
+            if (ScopeExcludedFolderNames.Contains(segments[i], StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="fullPath"/> to a path relative to <paramref name="projectRoot"/>, and
+    /// returns false when the result escapes the root. Path.GetRelativePath happily answers '..\..\x' for
+    /// a path outside the root, and Path.Combine then walks back out of the archive folder, so every
+    /// caller that builds a path under the root has to reject a rooted result and any '..' segment.
+    /// </summary>
+    private static bool TryGetPathUnderRoot(string fullPath, string projectRoot, out string relative)
+    {
+        relative = Path.GetRelativePath(projectRoot, fullPath);
+        if (Path.IsPathRooted(relative))
+        {
+            return false;
+        }
+
+        foreach (string segment in relative.Split(PathSeparators))
+        {
+            if (segment == "..")
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Returns the path of the first file that already owns this proposed file name - a scope file in
@@ -556,13 +688,21 @@ public sealed class FileNamingWorkflow
         return companions;
     }
 
+    /// <summary>
+    /// Returns the canonical name this row would take, or null when it must not be proposed.
+    /// <paramref name="exhaustedSeries"/> is set only when the row genuinely needed a fresh number and
+    /// the series had none left, so callers can tell "nothing to do" apart from "nothing available".
+    /// </summary>
     private static string? TryProposeFileName(
         NumberAllocator allocator,
         ParsedFileName parsed,
         DocumentKind kind,
         bool isRoot,
-        ProjectNumber project)
+        ProjectNumber project,
+        out NumberSeries? exhaustedSeries)
     {
+        exhaustedSeries = null;
+
         if (parsed.State is NameState.Canonical or NameState.Unparseable || kind is not (DocumentKind.Part or DocumentKind.Assembly))
         {
             return null;
@@ -587,9 +727,23 @@ public sealed class FileNamingWorkflow
 
         bool hasReusableToken = tokenBelongsToProject && parsed.Token!.Value.Number.Series == requiredSeries;
 
-        NamingToken token = hasReusableToken
-            ? parsed.Token!.Value
-            : new NamingToken(project, allocator.Allocate(requiredSeries));
+        NamingToken token;
+        if (hasReusableToken)
+        {
+            token = parsed.Token!.Value;
+        }
+        else
+        {
+            if (allocator.Allocate(requiredSeries) is not ItemNumber allocated)
+            {
+                // Every number in the series is taken. Abstain and tell the caller which series ran out,
+                // so it can say so instead of throwing out of Analyze and never opening the window.
+                exhaustedSeries = requiredSeries;
+                return null;
+            }
+
+            token = new NamingToken(project, allocated);
+        }
 
         string description = parsed.Description!;
 
@@ -607,19 +761,65 @@ public sealed class FileNamingWorkflow
     private static bool IsDuplicatedNumber(NumberAllocator allocator, NamingToken token) =>
         allocator.Duplicates(token.Number.Series).Any(group => group.Number.Value == token.Number.Value);
 
+    /// <summary>
+    /// The one operator-facing sentence for a file the project does not own. It names the boundary in
+    /// full, because "outside the project scope" on its own does not tell an engineer which folder rule
+    /// put their file there.
+    /// </summary>
+    private static string DescribeOutOfScope(string fileName, string projectRoot) =>
+        $"'{fileName}' is outside the project scope ({projectRoot}, excluding "
+        + $"{string.Join(", ", ScopeExcludedFolderNames[..^1])} and {ScopeExcludedFolderNames[^1]}) "
+        + "and is never renamed.";
+
+    /// <summary>
+    /// The one operator-facing sentence for an exhausted series, shared by the row reason and the plan
+    /// blocker so the two can never drift apart. The maximum comes from ItemNumber rather than a literal.
+    /// </summary>
+    private static string DescribeExhaustedSeries(NumberSeries series, ProjectNumber project)
+    {
+        int max = series == NumberSeries.Part ? ItemNumber.PartMaxValue : ItemNumber.AssemblyMaxValue;
+        string seriesName = series == NumberSeries.Part ? "part" : "assembly";
+        return $"The {seriesName} number series for project {project} is exhausted "
+            + $"({new ItemNumber(series, max)}); no number can be allocated.";
+    }
+
     private static NamingAnalysisRow BuildRow(
         DocumentSnapshot document,
         ActiveAssemblySnapshot scan,
         INamingFileSystem fileSystem,
         NumberAllocator? allocator,
-        ProjectNumber? project)
+        ProjectNumber? project,
+        string? projectRoot)
     {
         string currentFileName = Path.GetFileName(document.FullPath);
         ParsedFileName parsed = FileNameParser.Parse(currentFileName);
         VaultState vaultState = fileSystem.IsVaultManaged(document.FullPath) ? VaultState.Managed : VaultState.Unmanaged;
 
+        if (IsOutsideProjectScope(document.FullPath, projectRoot))
+        {
+            // Not this project's file to rename, and not this project's number to spend on it. Returning
+            // before TryProposeFileName also keeps the allocator untouched, so an out-of-scope reference
+            // never burns a number that an in-scope row would then skip.
+            return new NamingAnalysisRow(
+                document.FullPath,
+                currentFileName,
+                document.Kind,
+                document.IsRoot,
+                document.IsModifiable,
+                document.IsDirty,
+                document.ParentFullPaths,
+                document.ExternalParentFullPaths,
+                document.PartNumberProperty,
+                parsed,
+                vaultState,
+                null,
+                RenameAction.None,
+                [DescribeOutOfScope(currentFileName, projectRoot!)]);
+        }
+
+        NumberSeries? exhaustedSeries = null;
         string? proposedFileName = allocator is not null && project is ProjectNumber confirmedProject
-            ? TryProposeFileName(allocator, parsed, document.Kind, document.IsRoot, confirmedProject)
+            ? TryProposeFileName(allocator, parsed, document.Kind, document.IsRoot, confirmedProject, out exhaustedSeries)
             : null;
 
         List<string> reasons = [];
@@ -627,6 +827,11 @@ public sealed class FileNamingWorkflow
         if (proposedFileName is null)
         {
             action = RenameAction.None;
+            if (exhaustedSeries is NumberSeries ranOut && project is ProjectNumber exhaustedProject)
+            {
+                reasons.Add(DescribeExhaustedSeries(ranOut, exhaustedProject));
+            }
+
             if (allocator is not null
                 && project is ProjectNumber duplicateCheckProject
                 && parsed.Token is NamingToken candidateToken

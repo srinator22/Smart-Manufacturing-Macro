@@ -292,14 +292,21 @@ public sealed class FileNamingViewModel : INotifyPropertyChanged
 
     private static string DescribeExecution(RenameExecution execution)
     {
-        int succeeded = execution.Items.Count(item => item.Succeeded);
+        // The count is of models actually renamed on disk, not of fully clean items. An item whose model
+        // was renamed but whose companion drawing or Part Number write failed HAS been renamed, and
+        // reporting it as "Renamed 0 of 1" told the operator nothing had happened when it had.
+        int renamed = execution.Items.Count(item => item.ModelRenamed);
+        int partial = execution.Items.Count(item => item.ModelRenamed && !item.Succeeded);
         int total = execution.Items.Count;
         string originalsText = DescribeOriginals(execution.Manifest);
-        string message = $"Renamed {succeeded} of {total}. Originals: {originalsText}";
+        string countText = partial > 0
+            ? $"Renamed {renamed} of {total}, of which {partial} with warnings."
+            : $"Renamed {renamed} of {total}.";
+        string message = $"{countText} Originals: {originalsText}";
 
         List<string> failureDetails = [.. execution.Items
             .Where(item => !item.Succeeded)
-            .Select(item => $"{Path.GetFileName(item.CurrentFullPath)}: {item.ErrorMessage}")];
+            .Select(item => DescribeFailure(item))];
         if (failureDetails.Count > 0)
         {
             message += " " + string.Join(" ", failureDetails);
@@ -322,6 +329,25 @@ public sealed class FileNamingViewModel : INotifyPropertyChanged
         }
 
         return message;
+    }
+
+    /// <summary>
+    /// A model whose companion drawing rename failed is left open in Inventor with its reference already
+    /// rewritten to the model's new name (Execute pre-opens every companion so the in-memory reference
+    /// updates before the model's own SaveAs runs); the failure is the drawing's own save, not a lost
+    /// reference. The operator would otherwise read "Model renamed; companion drawing ... failed" and not
+    /// know the fix is a plain save in Inventor rather than a re-run of Apply.
+    /// </summary>
+    private static string DescribeFailure(RenameItemResult item)
+    {
+        string detail = $"{Path.GetFileName(item.CurrentFullPath)}: {item.ErrorMessage}";
+        if (item.ErrorMessage is not null &&
+            item.ErrorMessage.StartsWith("Model renamed; companion drawing", StringComparison.Ordinal))
+        {
+            detail += " The drawing is still open with the corrected reference; save it in Inventor to finish.";
+        }
+
+        return detail;
     }
 
     private static string? DeriveOriginalsRoot(RenameManifest manifest)

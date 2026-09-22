@@ -312,6 +312,72 @@ public class FileNamingViewModelTests
         Assert.Contains("locked by another process", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A model that was renamed but whose Part Number write failed is not a failed item: the file on
+    /// disk has its new name and its parent was saved. Counting it as "Renamed 0 of 1" told the operator
+    /// nothing had happened when in fact the rename had, so the count says renamed and warns separately.
+    /// </summary>
+    [Fact]
+    public void ApplyCountsPartiallySucceededItemsSeparatelyInTheStatusMessage()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, _, NamingAnalysis analysis) =
+            BuildFixture(includeVaultManagedPart: false);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        string newPartPath = Path.Combine(ProjectRoot, "124-0001 Bracket.ipt");
+        gateway.FailSetPartNumberFor(newPartPath, new InvalidOperationException("the property is read-only"));
+
+        viewModel.Apply();
+
+        Assert.StartsWith(
+            "Renamed 1 of 1, of which 1 with warnings. Originals:",
+            viewModel.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Model renamed; Part Number write failed: the property is read-only",
+            viewModel.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.Contains("_renamed-originals", viewModel.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Execute pre-opens every companion drawing before any rename runs, so a model whose own rename
+    /// succeeded leaves its drawing open in Inventor with the reference already rewritten to the model's
+    /// new name - the drawing's own save is what failed, not the reference. The status text has to tell
+    /// the operator that, or they will re-run Apply on a model that already moved.
+    /// </summary>
+    [Fact]
+    public void ApplyTellsTheOperatorToSaveTheDrawingWhenACompanionDrawingRenameFails()
+    {
+        FakeInventorNamingGateway gateway = new();
+        FakeNamingFileSystem fileSystem = new();
+        FileNamingWorkflow workflow = new(gateway, fileSystem, new FakeClock());
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 GRM (main assembly).iam");
+        string partPath = Path.Combine(ProjectRoot, "Bracket.ipt");
+        string drawingPath = Path.Combine(ProjectRoot, "Bracket.idw");
+
+        List<DocumentSnapshot> docs =
+        [
+            Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+            Doc(partPath, DocumentKind.Part, parents: [rootPath]),
+        ];
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(rootPath, false, false, docs);
+        fileSystem.SetScope(ProjectRoot, [rootPath, partPath, drawingPath]);
+        gateway.FailRenameFor(drawingPath, new InvalidOperationException("the drawing is checked out"));
+
+        NamingAnalysis analysis = workflow.Analyze(null);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+
+        viewModel.Apply();
+
+        Assert.Contains(
+            "Model renamed; companion drawing 'Bracket.idw' failed: the drawing is checked out "
+                + "The drawing is still open with the corrected reference; save it in Inventor to finish.",
+            viewModel.StatusMessage,
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ApplyReportsParentSaveFailuresAndLeavesOriginalsInPlace()
     {

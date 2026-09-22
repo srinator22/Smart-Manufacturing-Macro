@@ -373,6 +373,49 @@ public class FileNamingWorkflowTests
                 && finding.FileNames.Contains(Path.GetFileName(taglessPath)));
     }
 
+    /// <summary>
+    /// A model and its companion drawing share one number by design, so the pair is not a duplicate and
+    /// must not stop the model being normalized. Before the fix, '124-0074  wakeup .ipt' plus its '.idw'
+    /// counted as two owners of 0074, the duplicate safeguard abstained, and the malformed model could
+    /// never be repaired.
+    /// </summary>
+    [Fact]
+    public void ACompanionDrawingDoesNotBlockItsOwnModelAsADuplicateNumber()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, FakeNamingFileSystem fileSystem) = CreateWorkflow();
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 Root (main assembly).iam");
+        string modelPath = Path.Combine(ProjectRoot, "124-0001  Foo .ipt");
+        string drawingPath = Path.Combine(ProjectRoot, "124-0001  Foo .idw");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(modelPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, modelPath, drawingPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+
+        Assert.DoesNotContain(
+            analysis.Report!.ProjectFindings,
+            finding => finding.Code == FindingCode.DuplicateNumber);
+        NamingAnalysisRow modelRow = Assert.Single(analysis.Rows, row => row.FullPath == modelPath);
+        Assert.Equal("124-0001 Foo.ipt", modelRow.ProposedFileName);
+        Assert.Empty(modelRow.Reasons);
+
+        RenamePlan plan = workflow.Plan(analysis, Project124, new RenameOptions(NormalizeMalformed: true));
+
+        RenameOperation operation = Assert.Single(plan.Operations, op => op.CurrentFullPath == modelPath);
+        Assert.Equal("124-0001 Foo.ipt", Path.GetFileName(operation.NewFullPath));
+        (string companionCurrent, string companionNew) = Assert.Single(operation.CompanionDrawings);
+        Assert.Equal(drawingPath, companionCurrent);
+        Assert.Equal(Path.Combine(ProjectRoot, "124-0001 Foo.idw"), companionNew);
+    }
+
     [Fact]
     public void PlanIncludesCompanionDrawingSharingTheModelsCurrentStem()
     {
@@ -680,6 +723,143 @@ public class FileNamingWorkflowTests
         workflow.Execute(plan);
 
         Assert.DoesNotContain(@"EnsureOpen:C:\P\Widget.dwg", gateway.CallLog);
+    }
+
+    /// <summary>
+    /// A project that has used 9999 is a real end state, and Analyze asks for the next number before
+    /// anything knows one exists. The allocation used to throw out of ItemNumber's constructor, escape
+    /// Analyze, and stop the window opening at all - an exhausted series must instead be reported.
+    /// </summary>
+    [Fact]
+    public void AnExhaustedPartSeriesIsReportedAsAReasonAndABlockerRatherThanThrowing()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, FakeNamingFileSystem fileSystem) = CreateWorkflow();
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 Root (main assembly).iam");
+        string lastNumberPath = Path.Combine(ProjectRoot, "124-9999 Last.ipt");
+        string unnumberedPath = Path.Combine(ProjectRoot, "Widget.ipt");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(unnumberedPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, lastNumberPath, unnumberedPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+
+        NamingAnalysisRow row = Assert.Single(analysis.Rows, r => r.FullPath == unnumberedPath);
+        Assert.Null(row.ProposedFileName);
+        Assert.Equal(RenameAction.None, row.Action);
+        Assert.Contains(
+            "The part number series for project 124 is exhausted (9999); no number can be allocated.",
+            row.Reasons);
+
+        RenamePlan plan = workflow.Plan(analysis, Project124, new RenameOptions());
+
+        Assert.Contains(
+            "The part number series for project 124 is exhausted (9999); no number can be allocated.",
+            plan.Blockers);
+        Assert.Empty(plan.Operations);
+    }
+
+    [Fact]
+    public void AnExhaustedAssemblySeriesIsReportedAsAReasonAndABlockerRatherThanThrowing()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, FakeNamingFileSystem fileSystem) = CreateWorkflow();
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 Root (main assembly).iam");
+        string lastNumberPath = Path.Combine(ProjectRoot, "124-A999 Last (sub-assembly).iam");
+        string unnumberedPath = Path.Combine(ProjectRoot, "Rig.iam");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(unnumberedPath, DocumentKind.Assembly, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, lastNumberPath, unnumberedPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+
+        NamingAnalysisRow row = Assert.Single(analysis.Rows, r => r.FullPath == unnumberedPath);
+        Assert.Null(row.ProposedFileName);
+        Assert.Equal(RenameAction.None, row.Action);
+        Assert.Contains(
+            "The assembly number series for project 124 is exhausted (A999); no number can be allocated.",
+            row.Reasons);
+
+        RenamePlan plan = workflow.Plan(analysis, Project124, new RenameOptions());
+
+        Assert.Contains(
+            "The assembly number series for project 124 is exhausted (A999); no number can be allocated.",
+            plan.Blockers);
+        Assert.Empty(plan.Operations);
+    }
+
+    /// <summary>
+    /// An exhausted series is only a blocker when something actually needed a number from it. A project
+    /// that has filled its part series and has nothing left to rename is finished, not blocked.
+    /// </summary>
+    [Fact]
+    public void AnExhaustedSeriesNoRowNeedsIsNotABlocker()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, FakeNamingFileSystem fileSystem) = CreateWorkflow();
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 Root (main assembly).iam");
+        string lastNumberPath = Path.Combine(ProjectRoot, "124-9999 Last.ipt");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(lastNumberPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, lastNumberPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+        RenamePlan plan = workflow.Plan(analysis, Project124, new RenameOptions());
+
+        Assert.Empty(plan.Blockers);
+        Assert.Empty(plan.Operations);
+        Assert.Empty(Assert.Single(analysis.Rows, r => r.FullPath == lastNumberPath).Reasons);
+    }
+
+    /// <summary>
+    /// A row that can reuse its own existing token needs no allocation, so an exhausted series must not
+    /// stop it being normalized: 9999 is already this file's number.
+    /// </summary>
+    [Fact]
+    public void AnExhaustedSeriesStillNormalizesARowThatReusesItsOwnToken()
+    {
+        (FileNamingWorkflow workflow, FakeInventorNamingGateway gateway, FakeNamingFileSystem fileSystem) = CreateWorkflow();
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 Root (main assembly).iam");
+        string malformedLastPath = Path.Combine(ProjectRoot, "124-9999  Last .ipt");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(malformedLastPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, malformedLastPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+        RenamePlan plan = workflow.Plan(analysis, Project124, new RenameOptions(NormalizeMalformed: true));
+
+        Assert.Empty(plan.Blockers);
+        RenameOperation operation = Assert.Single(plan.Operations);
+        Assert.Equal("124-9999 Last.ipt", Path.GetFileName(operation.NewFullPath));
     }
 
     [Fact]
