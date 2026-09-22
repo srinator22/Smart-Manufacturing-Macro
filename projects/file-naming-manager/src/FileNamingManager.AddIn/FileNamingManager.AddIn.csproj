@@ -1,0 +1,48 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <InventorInteropPath Condition="'$(InventorInteropPath)' == ''">$(ProgramFiles)\Autodesk\Inventor 2027\Bin\Public Assemblies\Autodesk.Inventor.Interop.dll</InventorInteropPath>
+    <ApplicationManifest>FileNamingManager.AddIn.X.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(InventorInteropPath)')">
+    <DefineConstants>$(DefineConstants);INVENTOR_INTEROP</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileNamingManager.Application\FileNamingManager.Application.csproj" />
+    <ProjectReference Include="..\FileNamingManager.Infrastructure\FileNamingManager.Infrastructure.csproj" />
+    <ProjectReference Include="..\FileNamingManager.InventorAdapter\FileNamingManager.InventorAdapter.csproj" />
+    <ProjectReference Include="..\FileNamingManager.UI\FileNamingManager.UI.csproj" />
+    <ProjectReference Include="..\..\..\..\shared\WmpRibbon\WmpRibbon.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(InventorInteropPath)')">
+    <Reference Include="Autodesk.Inventor.Interop">
+      <HintPath>$(InventorInteropPath)</HintPath>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <EmbeddedResource Include="..\..\assets\file-naming-16.png"
+                      Link="Assets\file-naming-16.png"
+                      LogicalName="FileNamingManager.AddIn.Assets.file-naming-16.png" />
+    <EmbeddedResource Include="..\..\assets\file-naming-32.png"
+                      Link="Assets\file-naming-32.png"
+                      LogicalName="FileNamingManager.AddIn.Assets.file-naming-32.png" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

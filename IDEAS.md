@@ -7,7 +7,7 @@ This log preserves future Autodesk Inventor 2027 product ideas without turning t
 | ID | Product idea | Status | Suggested first milestone | Likely shared capabilities |
 | --- | --- | --- | --- | --- |
 | IDEA-001 | Smart Render Pack | Logged | Headless Blender proof | STEP transfer, component identity, naming, job progress |
-| IDEA-002 | Part Number & Filename Manager | Logged | Read-only part-number auditor | Component identity, metadata, conflict validation |
+| IDEA-002 | Part Number & Filename Manager | Promoted to `projects/file-naming-manager` (2026-09-23) | Analyzer plus in-session rename of unmanaged files; Vault-managed rename execution is the next task | Component identity, metadata, conflict validation, shared WMP ribbon |
 | IDEA-003 | 3D Print Production Manager | Logged | Read-only print dashboard | Assembly scanning, quantities, identity, STEP freshness |
 | IDEA-004 | SolidWorks Bridge | Logged | Assembly hierarchy and transform proof | Recursive scanning, component identity, metadata, geometry export, validation |
 
