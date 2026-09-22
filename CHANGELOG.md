@@ -23,6 +23,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Archive phase 2 hierarchy task
 - Record the file naming task and follow-on work
 - Record the review rounds and follow-on items
+- Archive file naming manager task
 
 ### Fixed
 - Guard post-release changelog generation
