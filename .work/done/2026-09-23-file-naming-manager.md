@@ -52,7 +52,7 @@ Findings the analyzer must report, each present in the real P124 folder: duplica
 - [x] Mutation testing covers Core and Application with enforced thresholds. -> scripts/mutation.sh Evidence: Core 92.68 at 85, Application 94.32 at 85, Infrastructure 97.87 at 90 (2026-09-23)
 - [x] README with all required sections, ARCHITECTURE, compatibility matrix, live TEST_PLAN including the Vault procedure, catalog row, BACKLOG updated. -> check-project-readmes.sh reports OK for 2 projects; VAULT_RENAME_DESIGN.md added as the record of the deferred managed-rename procedure
 - [x] A live smoke test against generated fixtures in a temp folder (never the Vault workspace), run only if no Inventor process exists, renames a two-level assembly and reopens it with resolved references; if it cannot run, that is recorded as unclaimed. -> `.work/jobs/naming-live-smoke/smoke-20260922T174443Z.log` SMOKE PASS on the final build in Inventor 2027 build 310192060: external-parent blocker fired live with a second open assembly and stayed silent after it closed; four renames, four originals archived, cold reopen in a fresh process with HasReferencesMissing false and Part Numbers 901-A001, 901-A002, 901-0005, 901-0006
-- [ ] Version bumped to 0.5.0, changelog regenerated, independent review PASS, gate green, PR CI and exact-main CI green. -> ship procedure
+- [x] Version bumped to 0.5.0, changelog regenerated, independent review PASS, gate green, PR CI and exact-main CI green. -> `check: OK` locally; PR #11 CI terminal-success for e346fe3; merged as 2a79f0a; main CI terminal-success for 2a79f0a
 
 ## Plan
 1. Core, Application, Infrastructure and their tests (WP1) in parallel with the shared ribbon and exporter migration (WP2) and the icon (WP6).
@@ -106,4 +106,22 @@ Found by rendering and by running rather than by review: D6 (grid showed the ana
 Not verified by the reviewer and carried by the advisor's gate runs: 255 / 8 / 6 / 55 tests, 0 warnings, format and analyzers clean, mutation thresholds 85 / 85 / 90, packaging OK for both add-ins, no leaks.
 
 ## Retro
-<!-- filled by docs/procedures/retro.md -->
+
+Defects by discovery route (docs/procedures/retro.md step 1):
+
+- Route (a), caught pre-merge by a check or review: R1-R5 (pass 1), F1-F2 (pass 2), B1-B2 (pass 3), T1-T4 (GitHub review), and the T3 over-reach (pass 5). Sixteen findings, every one a real defect, every one repaired with a failing test first. The gate worked; nothing recorded per step 2, with the exception below.
+- Route (d), self-noticed and self-corrected: D1-D5 from the advisor's audit and review of WP1, D6 found by rendering the window, D7 found only by the live Inventor run. Nothing recorded per step 2, with the exception below.
+- Route (b) escaped past merge: none. Route (c) reported by the human: none.
+
+Two proposals were appended to docs/lessons/PENDING.md (2026-09-22T18:19Z) because the route classification hides the signal:
+
+- Most route-(a) findings traced to the advisor's own port contracts and Plan rules, written before code and never reviewed on their own. A spec review before the first worker dispatch would have caught the companion, scope and external-parent gaps five review passes earlier.
+- D7 was visible only to a live run; later the cited live evidence went stale against a changed adapter until a reviewer refused it; and the T3 repair went beyond its finding with tests that pinned the new behaviour instead of the spec rule. Live-evidence freshness and spec-quoting tests are the candidate mechanizations.
+
+Regression tests verified present and observed failing before their fix: FileNamingProjectScopeTests, FileNamingPartialRenameTests, FileNamingPlanGuardTests, FileNamingExecutionTests, FileNamingWorkflowContractTests, the D1-D4 and D5-D7 tests in FileNamingWorkflowTests and FileNamingViewModelTests, ALoneDrawingRaisesTheMaximumAndIsNotADuplicate, and the render test proven by a broken-binding mutation.
+
+docs/lessons/INDEX.md has no approved lessons, so no counter was incremented (step 6).
+
+Delivery evidence: local `scripts/check.sh` `check: OK` (255 + 8 + 6 + 55 tests, both packaging tests, no leaks, mutation Core 92.92 / Application 94.89 / Infrastructure 97.92 against 85 / 85 / 90); PR #11 CI terminal-success for e346fe32db7a570f0aedc8decdf1e7b4ce6222bf; merged as 2a79f0ab649e201fbd1c395b19f4edbf1ac16617; main CI terminal-success for that SHA. Live: SMOKE PASS smoke-20260922T174443Z in Inventor 2027 build 310192060 against generated fixtures in %TEMP%.
+
+Not claimed: interactive acceptance on real projects (TEST_PLAN sections 2-3), the Vault Explorer procedure (section 4), execution of Vault-managed renames, and live acceptance of the exporter. `scripts/new-task.sh` still stays on main when scaffolding (BACKLOG).
