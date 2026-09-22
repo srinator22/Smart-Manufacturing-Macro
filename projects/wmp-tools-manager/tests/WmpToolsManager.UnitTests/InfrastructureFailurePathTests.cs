@@ -1,7 +1,8 @@
 // The adapters' failure paths, driven for real: a file another handle holds open, a cancelled request,
-// and one process that actually starts. Without these the catch blocks and the success branch are
-// never executed, and a gate that never executes them cannot claim they work.
+// and one process that actually starts and then really exits. Without these the catch blocks and the
+// success branch are never executed, and a gate that never executes them cannot claim they work.
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using WmpToolsManager.Application;
@@ -50,6 +51,71 @@ public sealed class InfrastructureFailurePathTests : IDisposable
 
         Assert.False(parse.IsSuccess);
         Assert.StartsWith("The package 'WmpInventorTools-0.6.0.zip' could not be read:", parse.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportsAPendingApplyMarkerAnotherHandleHasLocked()
+    {
+        string path = Path.Combine(root, "pending-apply.json");
+        File.WriteAllText(path, """{ "pid": 4242, "version": "0.6.0", "kind": "update" }""");
+
+        using FileStream exclusive = new(path, FileMode.Open, FileAccess.Read, FileShare.None);
+        ParseResult<PendingApply> parse = new PhysicalInstallState().ReadPendingApply(path);
+
+        Assert.False(parse.IsSuccess);
+        Assert.StartsWith("pending-apply.json could not be read:", parse.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CallsTheProcessRunningThisTestRunning() =>
+        Assert.True(new ProcessLauncher().IsProcessRunning(Environment.ProcessId));
+
+    [Fact]
+    public void CallsAProcessThatHasActuallyExitedNotRunning()
+    {
+        // cmd.exe /c exit is awaited to completion rather than raced against a wall clock, so the pid
+        // below is definitively gone by the time it is asked about.
+        using Process process = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        })!;
+        int pid = process.Id;
+        process.WaitForExit();
+
+        Assert.False(new ProcessLauncher().IsProcessRunning(pid));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    public void CallsAnIdThatNamesNoProcessNotRunning(int pid) =>
+        Assert.False(new ProcessLauncher().IsProcessRunning(pid));
+
+    [Fact]
+    public void CallsAProcessItCannotOpenNotRunning() =>
+        // Id 0 is the System Idle Process: GetProcessById returns it, and reading HasExited then
+        // raises Win32Exception "Access is denied". Whatever such an id is, it is not the
+        // powershell.exe this add-in launched, so it must not hold the dialog shut.
+        Assert.False(new ProcessLauncher().IsProcessRunning(0));
+
+    [Fact]
+    public void ReportsTheIdOfAProcessItReallyStarted()
+    {
+        LaunchResult result = new ProcessLauncher().Launch("cmd.exe", "/c exit");
+
+        Assert.True(result.Launched);
+        Assert.NotNull(result.ProcessId);
+        Assert.Contains($"(process {result.ProcessId}).", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportsNoProcessIdForAnExecutableWindowsCannotStart()
+    {
+        LaunchResult result = new ProcessLauncher().Launch("wmp-tools-manager-no-such-executable.exe", "");
+
+        Assert.False(result.Launched);
+        Assert.Null(result.ProcessId);
     }
 
     [Fact]

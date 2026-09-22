@@ -147,6 +147,51 @@ $state.plugins = @(@($state.plugins) + [pscustomobject][ordered]@{
     [System.Text.UTF8Encoding]::new($false))
 PS_EOF
 
+cat > "$HELPERS/set-catalog-install-directory.ps1" <<'PS_EOF'
+param(
+    [Parameter(Mandatory = $true)][string]$CatalogPath,
+    [Parameter(Mandatory = $true)][string]$InstallDirectory)
+$ErrorActionPreference = 'Stop'
+
+# Stands in for a hostile or corrupt catalog.json inside an otherwise well-formed package. The zip
+# is hash-verified, but the digest only proves the package is the one the SHA256SUMS names - it
+# says nothing about whether the catalog inside it stays within the Addins root.
+$catalog = Get-Content -Raw -LiteralPath $CatalogPath | ConvertFrom-Json
+@($catalog.plugins)[0].installDirectory = $InstallDirectory
+[System.IO.File]::WriteAllText(
+    $CatalogPath,
+    (ConvertTo-Json -InputObject $catalog -Depth 6),
+    [System.Text.UTF8Encoding]::new($false))
+PS_EOF
+
+cat > "$HELPERS/set-catalog-addin-template.ps1" <<'PS_EOF'
+param(
+    [Parameter(Mandatory = $true)][string]$CatalogPath,
+    [Parameter(Mandatory = $true)][string]$AddinTemplate)
+$ErrorActionPreference = 'Stop'
+
+# addinTemplate is the one catalog value that is a relative path rather than a segment, so the
+# installer derives templates/<id>.addin.template itself and refuses a catalog that says otherwise.
+$catalog = Get-Content -Raw -LiteralPath $CatalogPath | ConvertFrom-Json
+@($catalog.plugins)[0].addinTemplate = $AddinTemplate
+[System.IO.File]::WriteAllText(
+    $CatalogPath,
+    (ConvertTo-Json -InputObject $catalog -Depth 6),
+    [System.Text.UTF8Encoding]::new($false))
+PS_EOF
+
+cat > "$HELPERS/run-runtime-probe.ps1" <<'PS_EOF'
+param(
+    [Parameter(Mandatory = $true)][string]$BodyPath,
+    [Parameter(Mandatory = $true)][string]$DotnetRoot)
+$ErrorActionPreference = 'Stop'
+
+# The installer has top-level side effects, so the probe is exercised by dot-sourcing just the
+# function text that test-release.sh extracted from it - no copy of the logic lives here.
+. ([scriptblock]::Create((Get-Content -Raw -LiteralPath $BodyPath)))
+if (Test-DesktopRuntime10 -DotnetRoot $DotnetRoot) { 'TRUE' } else { 'FALSE' }
+PS_EOF
+
 cat > "$HELPERS/compress.ps1" <<'PS_EOF'
 param(
     [Parameter(Mandatory = $true)][string]$StageRoot,
@@ -212,6 +257,34 @@ echo "release-test: package contents OK ($PLUGIN_COUNT plugins packaged)"
 ( cd dist && sha256sum --check --quiet <(sed "s#  Install-WmpInventorTools.ps1#  WmpInventorTools-$VERSION/Install-WmpInventorTools.ps1#" SHA256SUMS.txt) ) \
   || fail "SHA256SUMS.txt does not match the produced artifacts"
 echo "release-test: SHA256SUMS OK"
+
+# --- the .NET 10 Desktop runtime probe is x64-only ---------------------------
+# The add-ins are x64 only, so an x86 .NET 10 Desktop runtime must not satisfy the preflight. A
+# machine state cannot be faked from here, so the probe is exercised as a unit against two fake
+# dotnet roots: the function text is lifted out of the installer (never copied into this test) and
+# dot-sourced, so what runs is exactly what ships.
+PROBE_BODY="$TEST_ROOT/runtime-probe-body.ps1"
+awk '/^function Test-DesktopRuntime10 \{$/,/^\}$/' "$ROOT/scripts/release/Install-WmpInventorTools.ps1" > "$PROBE_BODY"
+grep -q "Test-DesktopRuntime10" "$PROBE_BODY" \
+  || fail "could not extract Test-DesktopRuntime10 from the installer"
+
+T4_OK_ROOT="$TEST_ROOT/dotnet-x64-ok"
+T4_BAD_ROOT="$TEST_ROOT/dotnet-x64-old"
+mkdir -p "$T4_OK_ROOT/shared/Microsoft.WindowsDesktop.App/10.0.1"
+mkdir -p "$T4_BAD_ROOT/shared/Microsoft.WindowsDesktop.App/9.0.1"
+
+probe_result() {
+  ps_run run-runtime-probe.ps1 \
+    -BodyPath "$(cygpath -w "$PROBE_BODY")" -DotnetRoot "$(cygpath -w "$1")" 2>&1 | tr -d '\r'
+}
+
+t4_ok="$(probe_result "$T4_OK_ROOT")" || fail "the runtime probe errored on a .NET 10 root: $t4_ok"
+grep -qx "TRUE" <<<"$t4_ok" \
+  || fail "the runtime probe rejected a root holding Microsoft.WindowsDesktop.App 10.0.1: $t4_ok"
+t4_bad="$(probe_result "$T4_BAD_ROOT")" || fail "the runtime probe errored on a .NET 9 root: $t4_bad"
+grep -qx "FALSE" <<<"$t4_bad" \
+  || fail "the runtime probe accepted a root holding only Microsoft.WindowsDesktop.App 9.0.1: $t4_bad"
+echo "release-test: x64 .NET 10 Desktop runtime probe OK (10.x accepted, 9.x rejected)"
 
 # --- isolated install --------------------------------------------------------
 ADDINS="$TEST_ROOT/addins"
@@ -283,6 +356,48 @@ FIRST_MANIFEST="$(head -n1 <<<"$PLUGIN_ROWS" | cut -f4)"
 [[ -f "$STATE/previous/$VERSION/$FIRST_MANIFEST" ]] \
   || fail "the archived install is missing its manifest $FIRST_MANIFEST"
 echo "release-test: idempotent reinstall OK"
+
+# --- a plugin dropped by the new release must not stay installed -------------
+# When a release stops shipping a plugin, its folder and .addin manifest are not in the new
+# catalog, so the archive loop never touches them: Inventor would keep loading a plugin that
+# installed.json no longer records. The install must archive it like any other replaced file.
+DROP_ADDINS="$TEST_ROOT/addins-dropped"
+DROP_STATE="$TEST_ROOT/state-dropped"
+mkdir -p "$DROP_ADDINS" "$DROP_STATE"
+DROP_ADDINS_W="$(cygpath -w "$DROP_ADDINS")"
+DROP_STATE_W="$(cygpath -w "$DROP_STATE")"
+
+pwsh -NoProfile -File "$INSTALLER" \
+  -ZipPath "$ZIP_W" -Sha256SumsPath "$SUMS_W" \
+  -AddinsRoot "$DROP_ADDINS_W" -StateRoot "$DROP_STATE_W" >/dev/null \
+  || fail "the first install into the dropped-plugin roots did not complete"
+
+ps_run plant-fake-plugin.ps1 -AddinsRoot "$DROP_ADDINS_W" -StatePath "$DROP_STATE_W\\installed.json" \
+  || fail "could not plant the plugin that the next release drops"
+[[ -f "$DROP_ADDINS/FakePlugin/Fake.dll" ]] || fail "the planted dropped plugin was not created"
+
+drop_output="$(pwsh -NoProfile -File "$INSTALLER" \
+  -ZipPath "$ZIP_W" -Sha256SumsPath "$SUMS_W" \
+  -AddinsRoot "$DROP_ADDINS_W" -StateRoot "$DROP_STATE_W" 2>&1)" \
+  || fail "the install that drops a plugin did not complete: $drop_output"
+grep -q "Archived plugin no longer in this release: fake-plugin" <<<"$drop_output" \
+  || fail "the install did not report the dropped plugin: $drop_output"
+
+[[ ! -e "$DROP_ADDINS/FakePlugin" ]] \
+  || fail "the install left the dropped plugin folder in the add-ins root"
+[[ ! -e "$DROP_ADDINS/Autodesk.FakePlugin.Inventor.addin" ]] \
+  || fail "the install left the dropped plugin manifest in the add-ins root"
+DROP_ARCHIVE="$(compgen -G "$DROP_STATE/previous/$VERSION*" | head -n1)" \
+  || fail "the install that drops a plugin did not archive the previous install"
+[[ -f "$DROP_ARCHIVE/FakePlugin/Fake.dll" ]] \
+  || fail "the dropped plugin folder was deleted instead of archived under '$DROP_ARCHIVE'"
+[[ -f "$DROP_ARCHIVE/Autodesk.FakePlugin.Inventor.addin" ]] \
+  || fail "the dropped plugin manifest was deleted instead of archived under '$DROP_ARCHIVE'"
+grep -qx "fake-plugin-bytes" "$DROP_ARCHIVE/FakePlugin/Fake.dll" \
+  || fail "the archived dropped plugin does not hold its original bytes"
+grep -q "fake-plugin" "$DROP_STATE/installed.json" \
+  && fail "installed.json still lists the dropped plugin" || true
+echo "release-test: a plugin dropped by the new release is archived, not stranded OK"
 
 # --- rollback ----------------------------------------------------------------
 # A plugin the newer release introduced is not present in the archived older release. Rollback must
@@ -466,5 +581,89 @@ grep -qx "AFTER" <<<"$partial2_output" \
 [[ -d "$PARTIAL2_STATE/previous/$VERSION" ]] \
   || fail "a part-way upgrade failure did not leave the previous install archived"
 echo "release-test: part-way failure over an existing install points at -Rollback OK"
+
+# --- a catalog that escapes the add-ins root must be refused -----------------
+# The zip is hash-verified, but the digest only proves the package is the one SHA256SUMS names; it
+# does not vouch for the catalog inside it. A catalog whose installDirectory carries a separator
+# would copy, and later archive, outside the Inventor Addins root, so the installer validates every
+# catalog path segment itself before the Addins root is touched.
+ESCAPE_STAGE="$TEST_ROOT/escape-stage"
+cp -r "$ROOT/dist/WmpInventorTools-$VERSION" "$ESCAPE_STAGE"
+ps_run set-catalog-install-directory.ps1 \
+  -CatalogPath "$(cygpath -w "$ESCAPE_STAGE/catalog.json")" -InstallDirectory '..\Escape' \
+  || fail "could not rewrite the catalog of the escaping package"
+
+ESCAPE_ZIP_NAME="WmpInventorTools-$VERSION-escape.zip"
+ESCAPE_ZIP="$TEST_ROOT/$ESCAPE_ZIP_NAME"
+ps_run compress.ps1 -StageRoot "$(cygpath -w "$ESCAPE_STAGE")" -ZipPath "$(cygpath -w "$ESCAPE_ZIP")" \
+  || fail "could not build the escaping package"
+ESCAPE_SUMS="$TEST_ROOT/SHA256SUMS-escape.txt"
+printf '%s  %s\n' "$(sha256sum "$ESCAPE_ZIP" | cut -d' ' -f1)" "$ESCAPE_ZIP_NAME" > "$ESCAPE_SUMS"
+
+ESCAPE_PARENT="$TEST_ROOT/escape-roots"
+ESCAPE_ADDINS="$ESCAPE_PARENT/addins"
+ESCAPE_STATE="$ESCAPE_PARENT/state"
+mkdir -p "$ESCAPE_ADDINS" "$ESCAPE_STATE"
+ESCAPE_ID="$(head -n1 <<<"$PLUGIN_ROWS" | cut -f1)"
+
+# Stands in for whatever the user already keeps beside the Addins root. The archive step runs before
+# the package is read, so an unvalidated '..\Escape' moved this folder into the state archive - the
+# install then failed on the missing source folder, leaving the damage already done.
+mkdir -p "$ESCAPE_PARENT/Escape"
+echo "outside-the-addins-root" > "$ESCAPE_PARENT/Escape/keep.txt"
+
+set +e
+escape_output="$(pwsh -NoProfile -File "$INSTALLER" \
+  -ZipPath "$(cygpath -w "$ESCAPE_ZIP")" -Sha256SumsPath "$(cygpath -w "$ESCAPE_SUMS")" \
+  -AddinsRoot "$(cygpath -w "$ESCAPE_ADDINS")" -StateRoot "$(cygpath -w "$ESCAPE_STATE")" 2>&1)"
+escape_rc=$?
+set -e
+[[ "$escape_rc" -eq 1 ]] || fail "an escaping catalog exited $escape_rc; expected 1: $escape_output"
+grep -q "installDirectory" <<<"$escape_output" \
+  || fail "the escaping catalog message did not name the field: $escape_output"
+grep -qF '..\Escape' <<<"$escape_output" \
+  || fail "the escaping catalog message did not name the value: $escape_output"
+grep -q "$ESCAPE_ID" <<<"$escape_output" \
+  || fail "the escaping catalog message did not name the plugin: $escape_output"
+grep -qx "outside-the-addins-root" "$ESCAPE_PARENT/Escape/keep.txt" 2>/dev/null \
+  || fail "the escaping catalog reached a folder outside the add-ins root at '$ESCAPE_PARENT/Escape'"
+[[ -z "$(ls -A "$ESCAPE_ADDINS")" ]] \
+  || fail "the escaping catalog was refused but the add-ins root was still touched"
+[[ ! -e "$ESCAPE_STATE/previous" ]] \
+  || fail "the escaping catalog was refused but something was archived under '$ESCAPE_STATE/previous'"
+echo "release-test: escaping catalog refused before the add-ins root is touched OK"
+
+# --- catalog addinTemplate pointing outside the package -------------------------
+# The template path is joined under the package directory, so a catalog that names a path outside
+# it would read an arbitrary file into a manifest. The installer derives the path from the validated
+# id instead and treats any other value as a malformed catalog, before the Addins root is touched.
+TEMPLATE_STAGE="$TEST_ROOT/template-stage"
+cp -r "$ROOT/dist/WmpInventorTools-$VERSION" "$TEMPLATE_STAGE"
+ps_run set-catalog-addin-template.ps1 \
+  -CatalogPath "$(cygpath -w "$TEMPLATE_STAGE/catalog.json")" -AddinTemplate '../../outside.addin.template' \
+  || fail "could not rewrite the catalog of the template-escape package"
+TEMPLATE_ZIP_NAME="WmpInventorTools-$VERSION-template.zip"
+TEMPLATE_ZIP="$TEST_ROOT/$TEMPLATE_ZIP_NAME"
+ps_run compress.ps1 -StageRoot "$(cygpath -w "$TEMPLATE_STAGE")" -ZipPath "$(cygpath -w "$TEMPLATE_ZIP")" \
+  || fail "could not build the template-escape package"
+TEMPLATE_SUMS="$TEST_ROOT/SHA256SUMS-template.txt"
+printf '%s  %s\n' "$(sha256sum "$TEMPLATE_ZIP" | cut -d' ' -f1)" "$TEMPLATE_ZIP_NAME" > "$TEMPLATE_SUMS"
+TEMPLATE_ADDINS="$TEST_ROOT/template-roots/addins"
+TEMPLATE_STATE="$TEST_ROOT/template-roots/state"
+mkdir -p "$TEMPLATE_ADDINS" "$TEMPLATE_STATE"
+set +e
+template_output="$(pwsh -NoProfile -File "$INSTALLER" \
+  -ZipPath "$(cygpath -w "$TEMPLATE_ZIP")" -Sha256SumsPath "$(cygpath -w "$TEMPLATE_SUMS")" \
+  -AddinsRoot "$(cygpath -w "$TEMPLATE_ADDINS")" -StateRoot "$(cygpath -w "$TEMPLATE_STATE")" 2>&1)"
+template_rc=$?
+set -e
+[[ "$template_rc" -eq 1 ]] || fail "a catalog with an escaping addinTemplate exited $template_rc; expected 1: $template_output"
+grep -q "addinTemplate" <<<"$template_output" \
+  || fail "the escaping addinTemplate message did not name the field: $template_output"
+grep -qF "templates/$ESCAPE_ID.addin.template" <<<"$template_output" \
+  || fail "the escaping addinTemplate message did not name the expected value: $template_output"
+[[ -z "$(ls -A "$TEMPLATE_ADDINS")" ]] \
+  || fail "the escaping addinTemplate was refused but the add-ins root was still touched"
+echo "release-test: escaping addinTemplate refused before the add-ins root is touched OK"
 
 echo "release-package: OK"

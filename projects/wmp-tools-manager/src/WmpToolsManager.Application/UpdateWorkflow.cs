@@ -7,7 +7,12 @@
 // Dependencies: WmpToolsManager.Core and this project's ports. No IO, no HTTP, no process API.
 // Assumptions: Updates are never silent (ADR-0005 item 3): every method here runs because the user
 //   pressed something. Nothing is ever deleted - a download that fails verification is left where it
-//   is and named in the error, so it can be inspected rather than silently replaced.
+//   is and named in the error, so it can be inspected rather than silently replaced. The launched
+//   installer waits for Inventor to exit, which can take hours, and the dialog can be reopened in the
+//   meantime, so every launch records a pending-apply marker and every entry point refuses while that
+//   marker's process is still alive. The marker is advisory, not a lock: a stale one - the installer
+//   finished, or failed, or Windows was restarted - does not block anything and is simply overwritten
+//   by the next launch.
 // Validation source: docs/decisions/0005-release-distribution-and-updater.md;
 //   scripts/release/Install-WmpInventorTools.ps1 (the script this workflow launches).
 
@@ -62,6 +67,12 @@ public sealed class UpdateWorkflow
     {
         List<string> errors = [];
 
+        PendingApply? pending = ReadActivePendingApply(out string? pendingProblem);
+        if (pendingProblem is not null)
+        {
+            errors.Add(pendingProblem);
+        }
+
         ParseResult<InstalledState> installed = installState.ReadInstalled(paths.InstalledStateFile);
         SemanticVersion? installedVersion = null;
         IReadOnlyList<PluginSummary> plugins = [];
@@ -92,7 +103,7 @@ public sealed class UpdateWorkflow
         {
             errors.Add(sums.ErrorMessage!);
             return new UpdateCheck(
-                UpdateDecision.Unknown, installedVersion, null, null, null, string.Empty, plugins, hasPrevious, errors);
+                UpdateDecision.Unknown, installedVersion, null, null, null, string.Empty, plugins, hasPrevious, errors, pending);
         }
 
         ReleaseManifestParse manifest = Sha256SumsFile.Parse(sums.Content);
@@ -100,7 +111,7 @@ public sealed class UpdateWorkflow
         {
             errors.Add(manifest.ErrorMessage!);
             return new UpdateCheck(
-                UpdateDecision.Unknown, installedVersion, null, null, null, string.Empty, plugins, hasPrevious, errors);
+                UpdateDecision.Unknown, installedVersion, null, null, null, string.Empty, plugins, hasPrevious, errors, pending);
         }
 
         ReleaseManifest release = manifest.Manifest!;
@@ -116,8 +127,16 @@ public sealed class UpdateWorkflow
             notes,
             plugins,
             hasPrevious,
-            errors);
+            errors,
+            pending);
     }
+
+    /// <summary>
+    /// The apply this add-in launched that is still waiting for Inventor to exit, or null. A marker
+    /// whose process has gone - the installer finished, or failed, or Windows was restarted - is not
+    /// pending, and the file is left on disk for the next launch to overwrite rather than deleted.
+    /// </summary>
+    public PendingApply? GetActivePendingApply() => ReadActivePendingApply(out _);
 
     /// <summary>
     /// Downloads the package and the installer into the state root and verifies both against the
@@ -126,6 +145,14 @@ public sealed class UpdateWorkflow
     public async Task<StageResult> StageUpdateAsync(UpdateCheck check, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(check);
+
+        PendingApply? pending = GetActivePendingApply();
+        if (pending is not null)
+        {
+            // The sentence is the whole answer, so it is not repeated under Problems: a refusal the
+            // user can resolve by closing Inventor is guidance, not a fault to report.
+            return StageResult.Failed(pending.WaitingMessage, []);
+        }
 
         if (!check.CanStage)
         {
@@ -224,6 +251,12 @@ public sealed class UpdateWorkflow
     {
         ArgumentNullException.ThrowIfNull(stage);
 
+        PendingApply? pending = GetActivePendingApply();
+        if (pending is not null)
+        {
+            return new LaunchResult(false, pending.WaitingMessage);
+        }
+
         if (!stage.Verified
             || stage.PackageZipPath is null
             || stage.Sha256SumsPath is null
@@ -240,12 +273,22 @@ public sealed class UpdateWorkflow
             paths.StateRoot);
 
         LaunchResult launch = processLauncher.Launch(ApplyCommandLine.ExecutableFileName, arguments);
-        return launch.Launched
-            ? new LaunchResult(
-                true,
-                "Close Inventor to finish; the update applies automatically. "
-                + "Leave the PowerShell window open until it reports the installed version.")
-            : launch;
+        if (!launch.Launched)
+        {
+            return launch;
+        }
+
+        string recorded = RecordPendingApply(
+            launch.ProcessId,
+            stage.Version?.ToString() ?? PendingApply.UnknownVersion,
+            PendingApply.UpdateKind);
+
+        return new LaunchResult(
+            true,
+            "Close Inventor to finish; the update applies automatically. "
+            + "Leave the PowerShell window open until it reports the installed version."
+            + recorded,
+            launch.ProcessId);
     }
 
     /// <summary>
@@ -254,6 +297,12 @@ public sealed class UpdateWorkflow
     /// </summary>
     public LaunchResult RollbackToPrevious()
     {
+        PendingApply? pending = GetActivePendingApply();
+        if (pending is not null)
+        {
+            return new LaunchResult(false, pending.WaitingMessage);
+        }
+
         if (!installState.HasPreviousInstall(paths.PreviousRoot))
         {
             return new LaunchResult(false, $"There is no archived install under '{paths.PreviousRoot}'.");
@@ -270,12 +319,81 @@ public sealed class UpdateWorkflow
 
         string arguments = ApplyCommandLine.BuildRollbackArguments(installerPath, addinsRoot, paths.StateRoot);
         LaunchResult launch = processLauncher.Launch(ApplyCommandLine.ExecutableFileName, arguments);
-        return launch.Launched
-            ? new LaunchResult(
-                true,
-                "Close Inventor to finish; the previous version is restored automatically. "
-                + "Leave the PowerShell window open until it reports the restored version.")
-            : launch;
+        if (!launch.Launched)
+        {
+            return launch;
+        }
+
+        string recorded = RecordPendingApply(launch.ProcessId, ReadInstalledVersionText(), PendingApply.RollbackKind);
+
+        return new LaunchResult(
+            true,
+            "Close Inventor to finish; the previous version is restored automatically. "
+            + "Leave the PowerShell window open until it reports the restored version."
+            + recorded,
+            launch.ProcessId);
+    }
+
+    /// <summary>
+    /// Reads the marker and reports both what is pending and anything wrong with the file. A marker
+    /// that cannot be parsed never blocks: refusing every action because of a file the user cannot be
+    /// expected to find would be worse than the concurrent apply this guard exists to prevent.
+    /// </summary>
+    private PendingApply? ReadActivePendingApply(out string? problem)
+    {
+        problem = null;
+
+        ParseResult<PendingApply> parse = installState.ReadPendingApply(paths.PendingApplyFile);
+        if (!parse.IsSuccess)
+        {
+            if (!string.Equals(parse.ErrorMessage, PendingApply.NoMarkerMessage, StringComparison.Ordinal))
+            {
+                problem =
+                    $"{parse.ErrorMessage} It is at '{paths.PendingApplyFile}' and is ignored, so an "
+                    + "update can still be started; the next launch replaces it.";
+            }
+
+            return null;
+        }
+
+        PendingApply pending = parse.Value!;
+        return processLauncher.IsProcessRunning(pending.Pid) ? pending : null;
+    }
+
+    /// <summary>
+    /// Records the launched apply. The process is already running by this point, so a marker that
+    /// cannot be written is reported rather than treated as a failed launch - and the sentence says
+    /// what the user loses, which is the guard against a second launch.
+    /// </summary>
+    private string RecordPendingApply(int? processId, string version, string kind)
+    {
+        if (processId is not int pid)
+        {
+            return " The apply was started but its process id is unknown, so a second attempt "
+                + "cannot be refused; do not start another until this one finishes.";
+        }
+
+        try
+        {
+            installState.WritePendingApply(
+                paths.PendingApplyFile,
+                new PendingApply(pid, version, kind, DateTimeOffset.UtcNow));
+            return string.Empty;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return $" '{paths.PendingApplyFile}' could not be written ({exception.Message}), so a "
+                + "second attempt cannot be refused; do not start another until this one finishes.";
+        }
+    }
+
+    /// <summary>The installed version as the marker records it, for a rollback's own wording.</summary>
+    private string ReadInstalledVersionText()
+    {
+        ParseResult<InstalledState> installed = installState.ReadInstalled(paths.InstalledStateFile);
+        return installed.IsSuccess && installed.Value!.Version.Length > 0
+            ? installed.Value.Version
+            : PendingApply.UnknownVersion;
     }
 
     private async Task<string> ReadNotesAsync(

@@ -5,7 +5,10 @@
 //   plugin table, the error list, and which buttons are enabled or visible.
 // Dependencies: WmpToolsManager.Application and WmpToolsManager.Core only.
 // Assumptions: Updates are never silent: nothing here runs on its own timer and there is no startup
-//   check. The window calls CheckAsync once when it opens, and every other transition is a click.
+//   check. The window calls CheckAsync once when it opens, and every other transition is a click. An
+//   apply that this dialog already launched keeps running after the window is closed, so a reopened
+//   window finds it through the pending-apply marker and disables both launching buttons rather than
+//   letting a second powershell.exe rewrite the add-ins root alongside the first.
 //   Properties are plain strings and bools bound single-direction from TextBlocks - never Run.Text,
 //   whose default TwoWay binding crashes a window on open against a read-only property.
 // Validation source: docs/decisions/0005-release-distribution-and-updater.md item 3;
@@ -36,6 +39,7 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
     private string latestVersionText = "unknown";
     private UpdateCheck? check;
     private StageResult? stage;
+    private PendingApply? pendingApply;
 
     public UpdateViewModel(UpdateWorkflow workflow)
     {
@@ -115,13 +119,26 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
 
     public bool CanCheck => !IsBusy;
 
-    public bool CanDownload => !IsBusy && check is { CanStage: true } && stage is not { Verified: true };
+    public bool CanDownload =>
+        !IsBusy && !IsApplyPending && check is { CanStage: true } && stage is not { Verified: true };
 
     /// <summary>
     /// Rollback is offered only when the state root actually holds an archived install, because the
     /// installer's -Rollback fails outright when it does not.
     /// </summary>
     public bool IsRollbackVisible => check?.HasPreviousInstall == true;
+
+    /// <summary>
+    /// Rollback stays visible but disabled while an apply is pending, so the reason is on screen in
+    /// the status line instead of the button silently vanishing.
+    /// </summary>
+    public bool CanRollback => !IsBusy && !IsApplyPending;
+
+    /// <summary>True while an apply this add-in launched is still waiting for Inventor to exit.</summary>
+    public bool IsApplyPending => pendingApply is not null;
+
+    /// <summary>The sentence naming the waiting process, or empty when nothing is pending.</summary>
+    public string PendingApplyMessage => pendingApply?.WaitingMessage ?? string.Empty;
 
     public bool IsUpdateStaged => stage is { Verified: true };
 
@@ -139,11 +156,14 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
             UpdateCheck result = await workflow.CheckForUpdateAsync(cancellationToken).ConfigureAwait(true);
             check = result;
             stage = null;
+            pendingApply = result.PendingApply;
 
             Summary = result.Summary;
-            StatusMessage = result.Decision == UpdateDecision.UpdateAvailable
-                ? "Select Download and install to stage this release."
-                : result.Summary;
+            StatusMessage = pendingApply is not null
+                ? pendingApply.WaitingMessage
+                : result.Decision == UpdateDecision.UpdateAvailable
+                    ? "Select Download and install to stage this release."
+                    : result.Summary;
             NotesExcerpt = result.NotesExcerpt;
             InstalledVersionText = result.InstalledVersion?.ToString() ?? "unknown";
             LatestVersionText = result.LatestVersion?.ToString() ?? "unknown";
@@ -176,6 +196,7 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
         {
             StageResult result = await workflow.StageUpdateAsync(check, cancellationToken).ConfigureAwait(true);
             stage = result;
+            pendingApply = workflow.GetActivePendingApply();
             Replace(Errors, result.Errors);
             if (result.Plugins.Count > 0)
             {
@@ -189,6 +210,7 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
             }
 
             LaunchResult launch = workflow.LaunchApply(result);
+            pendingApply = workflow.GetActivePendingApply();
             StatusMessage = launch.Launched
                 ? StagedMessage + " " + launch.Message
                 : result.Message + " " + launch.Message;
@@ -211,6 +233,7 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
         try
         {
             LaunchResult launch = workflow.RollbackToPrevious();
+            pendingApply = workflow.GetActivePendingApply();
             StatusMessage = launch.Message;
         }
         finally
@@ -242,6 +265,7 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(CanCheck));
         OnPropertyChanged(nameof(CanDownload));
+        OnPropertyChanged(nameof(CanRollback));
     }
 
     private void RaiseDerivedStates()
@@ -252,6 +276,8 @@ public sealed class UpdateViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasPlugins));
         OnPropertyChanged(nameof(IsRollbackVisible));
         OnPropertyChanged(nameof(IsUpdateStaged));
+        OnPropertyChanged(nameof(IsApplyPending));
+        OnPropertyChanged(nameof(PendingApplyMessage));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

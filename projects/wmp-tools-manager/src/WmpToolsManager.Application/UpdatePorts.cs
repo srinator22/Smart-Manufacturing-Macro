@@ -30,8 +30,13 @@ public sealed record HashResult(string? Sha256, string? ErrorMessage)
     public bool IsSuccess => ErrorMessage is null;
 }
 
-/// <summary>Whether a process was started, and what to tell the user either way.</summary>
-public sealed record LaunchResult(bool Launched, string Message);
+/// <summary>
+/// Whether a process was started, and what to tell the user either way. <see cref="ProcessId"/> is the
+/// started process, which the workflow records so a second launch can be refused while the first is
+/// still waiting for Inventor to exit; it is null on every failure and on a launcher that cannot name
+/// the process it started.
+/// </summary>
+public sealed record LaunchResult(bool Launched, string Message, int? ProcessId = null);
 
 public interface IReleaseSource
 {
@@ -84,6 +89,18 @@ public interface IInstallState
 
     /// <summary>Writes UTF-8 text without a byte-order mark, replacing any existing file.</summary>
     void WriteText(string path, string content);
+
+    /// <summary>
+    /// Reads the pending-apply marker. A missing file is the normal state and is reported as
+    /// <see cref="PendingApply.NoMarkerMessage"/>, never as an exception.
+    /// </summary>
+    ParseResult<PendingApply> ReadPendingApply(string path);
+
+    /// <summary>
+    /// Writes the pending-apply marker, replacing any existing one. The marker is never deleted: a
+    /// stale one is harmless because the workflow only honours it while its process is still running.
+    /// </summary>
+    void WritePendingApply(string path, PendingApply value);
 }
 
 public interface IHashVerifier
@@ -94,4 +111,11 @@ public interface IHashVerifier
 public interface IProcessLauncher
 {
     LaunchResult Launch(string fileName, string arguments);
+
+    /// <summary>
+    /// True when a process with this id is still running. A pid that names nothing - because the
+    /// process finished, or because the marker on disk is from a previous Windows session - is false,
+    /// never an exception.
+    /// </summary>
+    bool IsProcessRunning(int pid);
 }

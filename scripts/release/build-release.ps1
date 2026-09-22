@@ -60,6 +60,24 @@ function Get-VersionPrefix {
     return [string]$nodes[0].InnerText
 }
 
+function Test-PathSegment {
+    # installDirectory and the derived manifest name are used as ONE name under the stage root here
+    # and, at install time, under the Inventor Addins root. Anything else - a separator, a drive
+    # letter, a relative marker, or a name Windows re-interprets, such as a leading dot run - reaches
+    # outside both roots, so it is rejected rather than normalized. The installer repeats this check
+    # on catalog.json because a package's SHA-256 proves only which file it is, not what it asks for.
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return $false }
+    if ($Value -eq "." -or $Value -eq "..") { return $false }
+    if ($Value.StartsWith(".")) { return $false }
+    if ($Value.IndexOfAny([char[]]@('\', '/', ':')) -ge 0) { return $false }
+    if ($Value.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0) { return $false }
+    if ($Value -ne [System.IO.Path]::GetFileName($Value)) { return $false }
+
+    return $true
+}
+
 $versionPrefix = Get-VersionPrefix -PropsPath (Join-Path $repoRoot "Directory.Build.props")
 if ($Version -ne $versionPrefix) {
     throw "Requested version '$Version' does not match Directory.Build.props VersionPrefix '$versionPrefix'."
@@ -136,6 +154,14 @@ foreach ($plugin in $plugins) {
 
     if ($definition.id -notmatch $idPattern) {
         throw "'$catalogFile' declares id '$($definition.id)' which is not a valid id; ids must match '$idPattern'."
+    }
+
+    if (-not (Test-PathSegment -Value ([string]$definition.installDirectory))) {
+        throw "'$catalogFile' declares installDirectory '$($definition.installDirectory)' for plugin '$($definition.id)'; it must be a single folder name - no path separators, drive letter, relative marker, or leading dot."
+    }
+
+    if (-not (Test-PathSegment -Value ([string]$plugin.ManifestName))) {
+        throw "'$catalogFile' derives the manifest name '$($plugin.ManifestName)' from '$($plugin.TemplatePath)' for plugin '$($definition.id)'; the manifest name must be a single file name - no path separators, drive letter, relative marker, or leading dot."
     }
 
     if ($idOwners.ContainsKey($definition.id)) {

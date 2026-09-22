@@ -129,6 +129,7 @@
                     Width="170"
                     Margin="0,0,8,0"
                     Padding="8,4"
+                    IsEnabled="{Binding CanRollback}"
                     Click="Rollback_Click"
                     Content="Roll back to previous"
                     Visibility="{Binding IsRollbackVisible, Converter={StaticResource BoolToVisibility}}" />

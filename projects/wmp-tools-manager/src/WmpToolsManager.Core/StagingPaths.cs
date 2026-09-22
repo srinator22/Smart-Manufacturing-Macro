@@ -22,6 +22,12 @@ public sealed class StagingPaths
     public const string PreviousFolderName = "previous";
     public const string InstalledStateFileName = "installed.json";
 
+    /// <summary>
+    /// The marker one launched apply leaves beside installed.json so a second launch can be refused
+    /// while the first still waits for Inventor to exit.
+    /// </summary>
+    public const string PendingApplyFileName = PendingApply.FileName;
+
     public StagingPaths(string stateRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stateRoot);
@@ -34,6 +40,7 @@ public sealed class StagingPaths
         StagingRoot = Path.Combine(StateRoot, StagingFolderName);
         PreviousRoot = Path.Combine(StateRoot, PreviousFolderName);
         InstalledStateFile = Path.Combine(StateRoot, InstalledStateFileName);
+        PendingApplyFile = Path.Combine(StateRoot, PendingApplyFileName);
     }
 
     public string StateRoot { get; }
@@ -43,6 +50,8 @@ public sealed class StagingPaths
     public string PreviousRoot { get; }
 
     public string InstalledStateFile { get; }
+
+    public string PendingApplyFile { get; }
 
     /// <summary>
     /// The installer's own default state root, given the caller's resolved %LOCALAPPDATA%.

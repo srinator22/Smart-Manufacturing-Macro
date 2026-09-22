@@ -56,8 +56,16 @@ public sealed record UpdateCheck(
     string NotesExcerpt,
     IReadOnlyList<PluginSummary> Plugins,
     bool HasPreviousInstall,
-    IReadOnlyList<string> Errors)
+    IReadOnlyList<string> Errors,
+    PendingApply? PendingApply = null)
 {
+    /// <summary>
+    /// Whether an apply this dialog already launched is still waiting for Inventor to exit. It is
+    /// deliberately not folded into <see cref="CanStage"/>: staging refuses for a different reason and
+    /// has to say so in different words.
+    /// </summary>
+    public bool HasPendingApply => PendingApply is not null;
+
     public bool CanStage =>
         Decision == UpdateDecision.UpdateAvailable
         && LatestVersion is not null

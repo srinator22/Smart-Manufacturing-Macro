@@ -7,9 +7,9 @@
 # 5, floor 0`. Re-baseline deliberately (do not just widen the gap) when a
 # genuine improvement raises the measured score.
 #
-#   Core:           measured 92.05% on 2026-09-23 -> 92.05-5=87.05 -> --break-at 85
-#   Application:    measured 92.44% on 2026-09-23 -> 92.44-5=87.44 -> --break-at 85
-#   Infrastructure: measured 77.46% on 2026-09-23 -> 77.46-5=72.46 -> --break-at 70
+#   Core:           measured 92.57% on 2026-09-23 -> 92.57-5=87.57 -> --break-at 85
+#   Application:    measured 92.47% on 2026-09-23 -> 92.47-5=87.47 -> --break-at 85
+#   Infrastructure: measured 79.31% on 2026-09-23 -> 79.31-5=74.31 -> --break-at 70
 #
 # Infrastructure sits lower than the other two on purpose, and the gap is
 # understood rather than tolerated. Its remaining survivors are:
@@ -18,12 +18,18 @@
 #   - the ProcessStartInfo UseShellExecute/CreateNoWindow flags, which nothing
 #     outside the operating system can observe once the process has started;
 #   - the Process.Start returned-null branch, which Windows does not produce;
-#   - the IOException catch blocks of HasPreviousInstall and FindStagedInstaller,
-#     which need a directory that exists but refuses enumeration - reproducible
-#     only by manipulating ACLs, which would make the suite machine-dependent.
+#   - the IOException catch blocks of HasPreviousInstall and FindInstaller, and
+#     FindInstaller's missing-staging-folder early return, which the same catch
+#     makes equivalent. Killing them needs a directory that exists but refuses
+#     enumeration - reproducible only by manipulating ACLs, which would make the
+#     suite machine-dependent;
+#   - the argument guards of CreateDirectory, WriteText and WritePendingApply,
+#     whose removal changes nothing observable because Directory.CreateDirectory,
+#     File.WriteAllText and PendingApplyJson.Serialize raise the same exception
+#     type for the same input.
 # Every other failure path of the adapters is exercised for real: a file another
-# handle holds open, a cancelled request, a non-success status, and one process
-# that actually starts.
+# handle holds open, a cancelled request, a non-success status, one process that
+# actually starts, and one that actually exits before its id is asked about.
 #
 # UI (WmpToolsManager.UI.csproj) and AddIn (WmpToolsManager.AddIn.csproj) are
 # EXCLUDED from this loop. Like SmartManufacturingExporter.UI and

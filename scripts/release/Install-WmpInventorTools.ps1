@@ -125,23 +125,91 @@ function Get-UtcStamp {
 }
 
 function Test-DesktopRuntime10 {
-    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($null -eq $dotnet) {
-        return $false
+    # The add-ins are x64 only, so an x86 .NET 10 Desktop runtime does not satisfy them. `dotnet` on
+    # PATH is not a safe witness: it may be the x86 host, which reports the x86 runtimes. The x64
+    # host is therefore probed by path - on 64-bit Windows %ProgramFiles% is the x64 tree and
+    # %ProgramFiles(x86)% is the x86 tree - and a host resolved under the x86 tree is never accepted.
+    # -DotnetRoot keeps the probe testable against a fixture root; production calls take the default.
+    param([string]$DotnetRoot = "")
+
+    $candidateRoots = @()
+    if ($DotnetRoot -ne "") {
+        $candidateRoots += $DotnetRoot
+    }
+    else {
+        if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+            $candidateRoots += (Join-Path $env:ProgramFiles "dotnet")
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+            $candidateRoots += $env:DOTNET_ROOT
+        }
     }
 
-    $runtimes = & $dotnet.Source --list-runtimes 2>$null
-    if ($LASTEXITCODE -ne 0 -or $null -eq $runtimes) {
-        return $false
+    $x86Prefix = ""
+    $x86Base = ${env:ProgramFiles(x86)}
+    if (-not [string]::IsNullOrWhiteSpace($x86Base)) {
+        $x86Prefix = [System.IO.Path]::GetFullPath($x86Base).TrimEnd('\') + '\'
     }
 
-    foreach ($line in $runtimes) {
-        if ($line -like "Microsoft.WindowsDesktop.App 10.*") {
-            return $true
+    foreach ($candidateRoot in $candidateRoots) {
+        if ([string]::IsNullOrWhiteSpace($candidateRoot)) { continue }
+
+        $rootFull = [System.IO.Path]::GetFullPath($candidateRoot)
+        if ($x86Prefix -ne "" -and
+            ($rootFull.TrimEnd('\') + '\').StartsWith($x86Prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+
+        $sharedDirectory = Join-Path $rootFull "shared\Microsoft.WindowsDesktop.App"
+        if (Test-Path -LiteralPath $sharedDirectory -PathType Container) {
+            $installed = @(Get-ChildItem -LiteralPath $sharedDirectory -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like "10.*" })
+            if ($installed.Count -gt 0) {
+                return $true
+            }
+        }
+
+        $hostExe = Join-Path $rootFull "dotnet.exe"
+        if (Test-Path -LiteralPath $hostExe -PathType Leaf) {
+            $runtimes = & $hostExe --list-runtimes 2>$null
+            if ($LASTEXITCODE -eq 0 -and $null -ne $runtimes) {
+                foreach ($line in $runtimes) {
+                    if ($line -like "Microsoft.WindowsDesktop.App 10.*") {
+                        return $true
+                    }
+                }
+            }
         }
     }
 
     return $false
+}
+
+function Test-PathSegment {
+    # catalog.json and installed.json supply values that are used as ONE name directly under the
+    # Addins root. Anything else - a separator, a drive letter, a relative marker, or a name Windows
+    # re-interprets, such as a leading dot run - reaches outside that root, so it is rejected rather
+    # than normalized. The zip's SHA-256 only proves the package is the one SHA256SUMS names; it
+    # does not vouch for what the catalog inside it asks the installer to do.
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return $false }
+    if ($Value -eq "." -or $Value -eq "..") { return $false }
+    if ($Value.StartsWith(".")) { return $false }
+    if ($Value.IndexOfAny([char[]]@('\', '/', ':')) -ge 0) { return $false }
+    if ($Value.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0) { return $false }
+    if ($Value -ne [System.IO.Path]::GetFileName($Value)) { return $false }
+
+    return $true
+}
+
+function Assert-PathSegment {
+    param([string]$Value, [string]$Field, [string]$PluginId, [string]$Source)
+
+    if (-not (Test-PathSegment -Value $Value)) {
+        Stop-Install -Message ("$Source declares $Field '$Value' for plugin '$PluginId'; it must be a " +
+            "single file or folder name - no path separators, drive letter, relative marker, or leading dot.") -Code 1
+    }
 }
 
 function Get-InventorProcess {
@@ -340,20 +408,37 @@ if ($Rollback) {
         $currentVersion = [string]$currentState.version
     }
 
-    $rolledBackDirectory = Join-Path $previousRoot "$currentVersion-rolledback-$(Get-UtcStamp)"
-    New-Item -ItemType Directory -Path $rolledBackDirectory -Force | Out-Null
-
     # Archiving only the names present in the archive would strand anything the NEWER release added:
     # a plugin introduced after the archived version would stay installed and loaded by Inventor while
     # installed.json reported the older version. The current installed.json is the authority on what
     # this install put in the Addins root, so it is archived first, then the archive's own names.
+    # installed.json is local state, not a signed artifact, so a name it supplies is validated before
+    # it is joined to the Addins root - otherwise a tampered state file moves arbitrary folders.
     $namesToArchive = @()
     if ($null -ne $currentState -and $currentState.plugins) {
         foreach ($recordedPlugin in @($currentState.plugins)) {
-            if ($recordedPlugin.installDirectory) { $namesToArchive += [string]$recordedPlugin.installDirectory }
-            if ($recordedPlugin.manifestName) { $namesToArchive += [string]$recordedPlugin.manifestName }
+            $recordedId = ""
+            if ($recordedPlugin.id) { $recordedId = [string]$recordedPlugin.id }
+            if ($recordedPlugin.installDirectory) {
+                Assert-PathSegment -Value ([string]$recordedPlugin.installDirectory) `
+                    -Field "installDirectory" -PluginId $recordedId -Source "installed.json"
+                $namesToArchive += [string]$recordedPlugin.installDirectory
+            }
+            if ($recordedPlugin.manifestName) {
+                Assert-PathSegment -Value ([string]$recordedPlugin.manifestName) `
+                    -Field "manifestName" -PluginId $recordedId -Source "installed.json"
+                $namesToArchive += [string]$recordedPlugin.manifestName
+            }
         }
     }
+
+    if (-not (Test-PathSegment -Value $currentVersion)) {
+        Write-Output "install: installed.json records an unusable version '$currentVersion'; archiving under 'unknown'."
+        $currentVersion = "unknown"
+    }
+    $rolledBackDirectory = Join-Path $previousRoot "$currentVersion-rolledback-$(Get-UtcStamp)"
+    New-Item -ItemType Directory -Path $rolledBackDirectory -Force | Out-Null
+
     foreach ($entry in @(Get-ChildItem -LiteralPath $restore.FullName -Force)) {
         if ($entry.Name -eq "installed.json") { continue }
         $namesToArchive += $entry.Name
@@ -393,7 +478,8 @@ else {
     # --- preflight ---------------------------------------------------------------
 
     if (-not (Test-DesktopRuntime10)) {
-        Stop-Install -Message "The .NET 10 Desktop runtime (x64) is required; install it from $script:DotnetDownloadUrl and run this again." -Code 3
+        Stop-Install -Message ("The .NET 10 Desktop runtime (x64) is required; the x86 runtime does not load " +
+            "these x64 add-ins. Install the x64 runtime from $script:DotnetDownloadUrl and run this again.") -Code 3
     }
 
     Assert-InventorClosed
@@ -500,12 +586,34 @@ else {
     }
     $releaseVersion = [string]$catalog.version
 
+    # Every catalog value that becomes a path segment is checked here, before the Addins root is
+    # touched, so a hostile or corrupt catalog cannot stage, install, or archive outside that root.
+    foreach ($plugin in @($catalog.plugins)) {
+        $catalogId = ""
+        if ($plugin.id) { $catalogId = [string]$plugin.id }
+        Assert-PathSegment -Value $catalogId -Field "id" -PluginId $catalogId -Source "catalog.json"
+        Assert-PathSegment -Value ([string]$plugin.installDirectory) `
+            -Field "installDirectory" -PluginId $catalogId -Source "catalog.json"
+        Assert-PathSegment -Value ([string]$plugin.manifestName) `
+            -Field "manifestName" -PluginId $catalogId -Source "catalog.json"
+        # The packager always stages the template as templates/<id>.addin.template; the catalog value
+        # is a relative path, so it is checked against that derivation instead of being joined blindly.
+        $expectedTemplate = "templates/$catalogId.addin.template"
+        if ([string]$plugin.addinTemplate -ne $expectedTemplate) {
+            Stop-Install -Message "catalog.json entry '$catalogId' declares addinTemplate '$($plugin.addinTemplate)'; expected '$expectedTemplate'." -Code 1
+        }
+    }
+
     # --- archive the current install --------------------------------------------
 
     $previousState = Read-InstalledState -Path $installedStatePath
     $previousVersion = "unknown"
     if ($null -ne $previousState -and $previousState.version) {
         $previousVersion = [string]$previousState.version
+    }
+    if (-not (Test-PathSegment -Value $previousVersion)) {
+        Write-Output "install: installed.json records an unusable version '$previousVersion'; archiving under 'unknown'."
+        $previousVersion = "unknown"
     }
 
     $archiveDirectory = Join-Path $previousRoot $previousVersion
@@ -515,6 +623,53 @@ else {
     }
 
     $archivedAnything = $false
+
+    # A release that drops a plugin leaves its folder and .addin manifest behind: they are absent
+    # from the new catalog, so the loop below never looks at them, and Inventor would keep loading a
+    # plugin that installed.json no longer records. The current installed.json is the authority on
+    # what the last install put in the Addins root, so anything it lists that this release no longer
+    # ships is archived first, into the same archive directory as the replaced files.
+    $catalogIds = @{}
+    foreach ($plugin in @($catalog.plugins)) {
+        $catalogIds[([string]$plugin.id).ToLowerInvariant()] = $true
+    }
+    if ($null -ne $previousState -and $previousState.plugins) {
+        foreach ($recordedPlugin in @($previousState.plugins)) {
+            $recordedId = ""
+            if ($recordedPlugin.id) { $recordedId = [string]$recordedPlugin.id }
+            if ($recordedId -ne "" -and $catalogIds.ContainsKey($recordedId.ToLowerInvariant())) {
+                continue
+            }
+
+            $removedNames = @()
+            if ($recordedPlugin.installDirectory) {
+                Assert-PathSegment -Value ([string]$recordedPlugin.installDirectory) `
+                    -Field "installDirectory" -PluginId $recordedId -Source "installed.json"
+                $removedNames += [string]$recordedPlugin.installDirectory
+            }
+            if ($recordedPlugin.manifestName) {
+                Assert-PathSegment -Value ([string]$recordedPlugin.manifestName) `
+                    -Field "manifestName" -PluginId $recordedId -Source "installed.json"
+                $removedNames += [string]$recordedPlugin.manifestName
+            }
+
+            $removedAnything = $false
+            foreach ($removedName in $removedNames) {
+                $removedPath = Join-Path $resolvedAddinsRoot $removedName
+                if (Test-Path -LiteralPath $removedPath) {
+                    $script:AddinsRootTouched = $true
+                    Move-IntoArchive -Source $removedPath -ArchiveDirectory $archiveDirectory
+                    $archivedAnything = $true
+                    $script:AddinsRootArchived = $true
+                    $removedAnything = $true
+                }
+            }
+            if ($removedAnything) {
+                Write-Output "Archived plugin no longer in this release: $recordedId"
+            }
+        }
+    }
+
     foreach ($plugin in @($catalog.plugins)) {
         $existingDirectory = Join-Path $resolvedAddinsRoot $plugin.installDirectory
         $existingManifest = Join-Path $resolvedAddinsRoot $plugin.manifestName
@@ -556,7 +711,7 @@ else {
         }
 
         Write-Manifest `
-            -TemplateFile (Join-Path $packageDirectory ($plugin.addinTemplate -replace "/", "\")) `
+            -TemplateFile (Join-Path (Join-Path $packageDirectory "templates") "$($plugin.id).addin.template") `
             -ManifestFile (Join-Path $resolvedAddinsRoot $plugin.manifestName) `
             -AssemblyPath $installedAssembly
 

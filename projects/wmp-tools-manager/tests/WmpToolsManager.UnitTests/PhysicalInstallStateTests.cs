@@ -215,11 +215,88 @@ public sealed class PhysicalInstallStateTests : IDisposable
         Assert.ThrowsAny<ArgumentException>(() => state.FindInstaller(path!));
         Assert.ThrowsAny<ArgumentException>(() => state.CreateDirectory(path!));
         Assert.ThrowsAny<ArgumentException>(() => state.WriteText(path!, "x"));
+        Assert.ThrowsAny<ArgumentException>(() => state.ReadPendingApply(path!));
+        Assert.ThrowsAny<ArgumentException>(() => state.WritePendingApply(
+            path!,
+            new PendingApply(1, "0.6.0", PendingApply.UpdateKind, DateTimeOffset.UnixEpoch)));
     }
 
     [Fact]
-    public void RefusesNullContent() =>
+    public void RefusesNullContent()
+    {
         Assert.Throws<ArgumentNullException>(() => state.WriteText(Path.Combine(root, "a.txt"), null!));
+        Assert.Throws<ArgumentNullException>(
+            () => state.WritePendingApply(Path.Combine(root, PendingApply.FileName), null!));
+    }
+
+    [Fact]
+    public void ReportsAStateRootWithNoPendingApplyMarkerAsTheNormalCase()
+    {
+        ParseResult<PendingApply> parse = state.ReadPendingApply(Path.Combine(root, PendingApply.FileName));
+
+        Assert.False(parse.IsSuccess);
+        Assert.Equal(PendingApply.NoMarkerMessage, parse.ErrorMessage);
+    }
+
+    [Fact]
+    public void WritesAndReadsBackTheMarkerItJustWrote()
+    {
+        string path = Path.Combine(root, PendingApply.FileName);
+        PendingApply marker = new(4242, "0.6.0", PendingApply.UpdateKind, DateTimeOffset.UnixEpoch);
+
+        state.WritePendingApply(path, marker);
+
+        Assert.True(File.Exists(path));
+        Assert.Equal(marker, state.ReadPendingApply(path).Value);
+    }
+
+    [Fact]
+    public void OverwritesAnEarlierMarkerAndNeverDeletesOne()
+    {
+        string path = Path.Combine(root, PendingApply.FileName);
+        state.WritePendingApply(path, new(1, "0.6.0", PendingApply.UpdateKind, DateTimeOffset.UnixEpoch));
+
+        state.WritePendingApply(path, new(2, "0.7.0", PendingApply.RollbackKind, DateTimeOffset.UnixEpoch));
+
+        PendingApply read = state.ReadPendingApply(path).Value!;
+        Assert.Equal(2, read.Pid);
+        Assert.Equal("0.7.0", read.Version);
+        Assert.Equal(PendingApply.RollbackKind, read.Kind);
+    }
+
+    [Fact]
+    public void CreatesTheStateRootWhenTheMarkerIsTheFirstThingWrittenThere()
+    {
+        string stateRoot = Path.Combine(root, "not-created-yet");
+        string path = Path.Combine(stateRoot, PendingApply.FileName);
+
+        state.WritePendingApply(path, new(7, "0.6.0", PendingApply.UpdateKind, DateTimeOffset.UnixEpoch));
+
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public void ReportsAMarkerItCannotParseRatherThanThrowing()
+    {
+        string path = Path.Combine(root, PendingApply.FileName);
+        File.WriteAllText(path, "{ not json");
+
+        ParseResult<PendingApply> parse = state.ReadPendingApply(path);
+
+        Assert.False(parse.IsSuccess);
+        Assert.StartsWith("pending-apply.json is not valid JSON:", parse.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WritesTheMarkerWithoutAByteOrderMark()
+    {
+        string path = Path.Combine(root, PendingApply.FileName);
+
+        state.WritePendingApply(path, new(1, "0.6.0", PendingApply.UpdateKind, DateTimeOffset.UnixEpoch));
+
+        byte[] bytes = File.ReadAllBytes(path);
+        Assert.NotEqual<byte[]>([0xEF, 0xBB, 0xBF], bytes[..3]);
+    }
 
     private string CreatePackage(string catalogJson)
     {

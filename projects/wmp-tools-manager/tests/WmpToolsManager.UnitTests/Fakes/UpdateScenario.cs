@@ -59,6 +59,24 @@ public sealed class UpdateScenario
         return scenario;
     }
 
+    /// <summary>
+    /// Marks an apply as already launched and still running, which is what a user who pressed Download
+    /// and install, left Inventor open, and reopened the dialog would find.
+    /// </summary>
+    public UpdateScenario WithPendingApply(int pid, string version, string kind)
+    {
+        InstallState.Pending = new(new PendingApply(pid, version, kind, DateTimeOffset.UnixEpoch), null);
+        Launcher.RunningPids.Add(pid);
+        return this;
+    }
+
+    /// <summary>A marker whose process is gone, which is what a finished or failed installer leaves.</summary>
+    public UpdateScenario WithStalePendingApply(int pid, string version, string kind)
+    {
+        InstallState.Pending = new(new PendingApply(pid, version, kind, DateTimeOffset.UnixEpoch), null);
+        return this;
+    }
+
     public UpdateWorkflow Build() =>
         new(Source, InstallState, HashVerifier, Launcher, new StagingPaths(StateRoot), AddinsRoot);
 }

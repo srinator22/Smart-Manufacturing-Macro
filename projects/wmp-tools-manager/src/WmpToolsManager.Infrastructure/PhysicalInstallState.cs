@@ -1,5 +1,6 @@
 // Purpose: Read and write the updater's on-disk state - installed.json, the catalog inside a package
-//   zip, the archived previous install, and the staged installer script.
+//   zip, the archived previous install, the staged installer script, and the pending-apply marker one
+//   launched installer leaves behind while it waits for Inventor to exit.
 // Inputs: Absolute paths the Application layer already checked against the state root.
 // Outputs: Parse results, booleans, and created folders. Nothing is ever deleted here.
 // Dependencies: System.IO and System.IO.Compression.
@@ -132,5 +133,42 @@ public sealed class PhysicalInstallState : IInstallState
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(content);
         File.WriteAllText(path, content, Utf8WithoutBom);
+    }
+
+    public ParseResult<PendingApply> ReadPendingApply(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (!File.Exists(path))
+        {
+            return new ParseResult<PendingApply>(null, PendingApply.NoMarkerMessage);
+        }
+
+        try
+        {
+            return PendingApplyJson.Parse(File.ReadAllText(path));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return new ParseResult<PendingApply>(
+                null,
+                $"{PendingApply.FileName} could not be read: {exception.Message}");
+        }
+    }
+
+    public void WritePendingApply(string path, PendingApply value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(value);
+
+        // A working-tree install has no state root yet, and the marker is the first thing written
+        // there. Creating the folder leaves any existing content alone.
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(path, PendingApplyJson.Serialize(value), Utf8WithoutBom);
     }
 }

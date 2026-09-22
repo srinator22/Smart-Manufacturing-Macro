@@ -15,6 +15,7 @@ The distribution model, and why no executable ships, is [ADR-0005](../../docs/de
 - On Download and install: creates `%LOCALAPPDATA%\WMP\InventorTools\staging\<version>\`, writes the digest file it checked against, downloads the package zip and `Install-WmpInventorTools.ps1`, and verifies both against that digest file. A mismatch is reported with the expected and actual digests, the file is left in place for inspection, and nothing is started.
 - Once both artifacts verify, starts `powershell.exe` with the staged installer, `-WaitForInventor`, and the add-ins and state roots, then tells you to close Inventor. The installer waits for every Inventor process to exit, archives the current install under `previous\`, copies the new one into place, and writes manifests for any plugin in the release that is not yet installed.
 - Offers Roll back to previous only when `%LOCALAPPDATA%\WMP\InventorTools\previous\` actually holds an archived install; that button runs the same installer with `-Rollback -WaitForInventor`.
+- Records the launched installer's process id in `%LOCALAPPDATA%\WMP\InventorTools\pending-apply.json` and refuses to start a second one while that process is still waiting for Inventor to close. Download and install and Roll back are disabled and the window says which version and which PowerShell process it is waiting on; Check again re-evaluates. A marker whose process has finished blocks nothing and is simply overwritten by the next launch.
 - Shows every failure - network, digest, filesystem, process - as text in the window. Nothing is ever deleted, and the add-in never writes into Inventor's add-ins folder itself.
 
 Updates are never silent. There is no startup check and no timer: every step above happens because you pressed something.
@@ -88,6 +89,8 @@ Then:
 6. Close Inventor. The PowerShell window archives the current install, copies the new one into place, prints the installed version and the plugin table, and prints the rollback command.
 7. Start Inventor and verify the commands as in Verify installation above.
 
+If you reopen Check for updates before closing Inventor, both Download and install and Roll back to previous are disabled and the window names the version and the PowerShell process it is waiting on. This is deliberate: two installers rewriting the add-ins folder at once would corrupt the install. Close Inventor to let the waiting one finish, or select Check again after it has, which re-enables the buttons.
+
 To undo an update, reopen Check for updates and select Roll back to previous, then close Inventor again. The button is present only when an archived install exists.
 
 ## Update
@@ -128,11 +131,13 @@ The script validates and removes only this add-in's per-user manifest and binary
 | SHA-256 mismatch | The message names the expected and actual digests and the file it kept. | Do not use that file. Select Check again to download it afresh; if it repeats, report it with both digests - the download did not match what the release published. |
 | Download and install is disabled | The summary line says why: already up to date, the installed build is newer, the state is unknown, or this release is already staged. | Nothing to do unless the state is unknown, which the Problems list explains. |
 | Nothing happened after closing Inventor | The PowerShell window must stay open; it is what applies the update. | Reopen the command and stage again, or run the one-line installer from the Update section. |
+| Download and install and Roll back are both disabled | The status line names the version and the PowerShell process already waiting, recorded in `%LOCALAPPDATA%\WMP\InventorTools\pending-apply.json`. | Close Inventor and let that PowerShell window finish, then reopen the command. If that window was closed or the machine was restarted, select Check again: a marker whose process is gone stops blocking. |
+| The window reports a problem with pending-apply.json | The marker could not be read. It is named with its full path and is ignored, so nothing is blocked. | Nothing to do; the next Download and install replaces the file. Delete it by hand only if you want it gone. |
 | Roll back to previous is not shown | `%LOCALAPPDATA%\WMP\InventorTools\previous\` holds no archived install with content. | Expected before the first update applied through this add-in. |
 | Roll back says no installer was found | The rollback runs `Install-WmpInventorTools.ps1`, which every install keeps at `%LOCALAPPDATA%\WMP\InventorTools\Install-WmpInventorTools.ps1`; this is missing only if that file was deleted by hand. | Use the PowerShell rollback command in the Update section. |
 | Updated DLL cannot be copied or loaded | Inventor may still hold the assembly open. | Close every Inventor process and let the waiting PowerShell window continue, or rerun the installer. |
 
-When reporting a problem, include the Inventor 2027 display version, the two version numbers the window shows, the exact text under Problems, and the contents of `%LOCALAPPDATA%\WMP\InventorTools\installed.json`. Do not attach proprietary CAD.
+When reporting a problem, include the Inventor 2027 display version, the two version numbers the window shows, the exact text under Problems, and the contents of `%LOCALAPPDATA%\WMP\InventorTools\installed.json` and, if it exists, `pending-apply.json`. Do not attach proprietary CAD.
 
 ## Versioning and changelog
 
@@ -152,7 +157,8 @@ Independent per-plugin version numbers and changelogs are not active yet. They r
 - There is no startup check and no notification. You only learn a release exists by opening the command.
 - Integrity rests on HTTPS to the pinned repository plus the published SHA-256. Nothing is code-signed, so a compromised repository or release would not be detected by this add-in.
 - Rollback restores the most recently archived install only. It runs `Install-WmpInventorTools.ps1`, which every install keeps at `%LOCALAPPDATA%\WMP\InventorTools\Install-WmpInventorTools.ps1`. Older archives under `previous\` must be restored by hand.
-- The add-in never deletes anything. Staged downloads, superseded packages and archived installs accumulate under `%LOCALAPPDATA%\WMP\InventorTools` until you remove them.
+- The add-in never deletes anything. Staged downloads, superseded packages, archived installs and the last `pending-apply.json` accumulate under `%LOCALAPPDATA%\WMP\InventorTools` until you remove them.
+- The one-apply-at-a-time guard covers this dialog only. It records the process it started and refuses a second one while that process lives; it is not a machine-wide lock, so an installer you start from PowerShell yourself while one is waiting is not detected.
 - The release-notes excerpt is the first 20 lines of the body, shown as plain text; Markdown is not rendered.
 - The check needs direct HTTPS access. A proxy requiring authentication is not configured anywhere and will surface as a network failure.
 
@@ -170,7 +176,7 @@ From Git Bash:
 ./scripts/check.sh
 ```
 
-The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. This product's mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 70%, against measured scores of 92.05% / 92.44% / 77.46% on 2026-09-23; `scripts/mutation.sh` records why Infrastructure sits lower and which mutants remain.
+The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. This product's mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 70%, against measured scores of 92.57% / 92.47% / 79.31% on 2026-09-23; `scripts/mutation.sh` records why Infrastructure sits lower and which mutants remain.
 
 Product-local checks:
 

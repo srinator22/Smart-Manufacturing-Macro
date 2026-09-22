@@ -51,6 +51,10 @@ create_project() {
   mkdir -p "$dir"
   : > "$dir/$name.AddIn.csproj"
   : > "$dir/$manifest_base.addin.template"
+  # JSON has no \E escape, so a backslash in a fixture value (the path-escape cases below) has to be
+  # doubled or ConvertFrom-Json rejects the fixture before build-release.ps1 can judge its contents.
+  local install_dir_json="${install_dir//\\/\\\\}"
+  local manifest_base_json="${manifest_base//\\/\\\\}"
   cat > "$dir/plugin.json" <<JSON
 {
   "id": "$id",
@@ -59,8 +63,8 @@ create_project() {
   "maturity": "beta",
   "addinProject": "$name.AddIn.csproj",
   "assembly": "$name.AddIn.dll",
-  "addinTemplate": "$manifest_base.addin.template",
-  "installDirectory": "$install_dir",
+  "addinTemplate": "$manifest_base_json.addin.template",
+  "installDirectory": "$install_dir_json",
   "ribbonPanel": "Test",
   "commands": ["Test.Command"],
   "homepage": "https://example.invalid/$name"
@@ -127,6 +131,35 @@ grep -q "Bad Id" <<<"$CASE_OUTPUT" || fail "invalid id message did not name the 
 grep -q "proj-bad" <<<"$CASE_OUTPUT" || fail "invalid id message did not name its catalog: $CASE_OUTPUT"
 dist_stage_exists && fail "the invalid-id case wrote '$DIST_STAGE'" || true
 echo "build-release-test: invalid id rejected, no dist write OK"
+
+# --- installDirectory that escapes the stage root ----------------------------------
+# installDirectory is used verbatim as a path segment under the stage root and, at install time,
+# under the Inventor Addins root. A value carrying a separator stages (and later installs) outside
+# both roots, so it must be rejected before anything is written.
+ESCAPE_DIR_ROOT="$WORK_ROOT/escape-installdir"
+create_project "$ESCAPE_DIR_ROOT" "proj-escape" "proj-escape-id" '..\Escape' "ManifestEscape"
+run_case "$ESCAPE_DIR_ROOT"
+[[ "$CASE_RC" -ne 0 ]] || fail "an escaping installDirectory exited 0; expected a rejection"
+grep -q "installDirectory" <<<"$CASE_OUTPUT" || fail "the escaping installDirectory message did not name the field: $CASE_OUTPUT"
+grep -qF '..\Escape' <<<"$CASE_OUTPUT" || fail "the escaping installDirectory message did not name the value: $CASE_OUTPUT"
+grep -q "proj-escape" <<<"$CASE_OUTPUT" || fail "the escaping installDirectory message did not name the plugin: $CASE_OUTPUT"
+dist_stage_exists && fail "the escaping-installDirectory case wrote '$DIST_STAGE'" || true
+[[ ! -e "$DIST_ROOT/Escape" ]] || fail "the escaping installDirectory staged outside the stage root at '$DIST_ROOT/Escape'"
+echo "build-release-test: escaping installDirectory rejected, nothing staged outside the stage root OK"
+
+# --- manifest name that is not a plain file name -----------------------------------
+# The manifest name is derived from the template file name and is written into catalog.json, which
+# the installer uses as a path segment under the Addins root. A dotted-prefix name is never a real
+# manifest and is the shape a traversal takes, so the packager must not emit it.
+ESCAPE_MANIFEST_ROOT="$WORK_ROOT/escape-manifest"
+create_project "$ESCAPE_MANIFEST_ROOT" "proj-dotted" "proj-dotted-id" "InstallDotted" "..evil"
+run_case "$ESCAPE_MANIFEST_ROOT"
+[[ "$CASE_RC" -ne 0 ]] || fail "a dotted manifest template name exited 0; expected a rejection"
+grep -q "manifest name" <<<"$CASE_OUTPUT" || fail "the dotted manifest name message did not name the field: $CASE_OUTPUT"
+grep -qF '..evil.addin' <<<"$CASE_OUTPUT" || fail "the dotted manifest name message did not name the value: $CASE_OUTPUT"
+grep -q "proj-dotted" <<<"$CASE_OUTPUT" || fail "the dotted manifest name message did not name the plugin: $CASE_OUTPUT"
+dist_stage_exists && fail "the dotted-manifest-name case wrote '$DIST_STAGE'" || true
+echo "build-release-test: dotted manifest name rejected, no dist write OK"
 
 # --- valid, distinct catalogs pass validation -------------------------------------
 # These fixtures have no Release build behind them, so this is expected to fail later, at the

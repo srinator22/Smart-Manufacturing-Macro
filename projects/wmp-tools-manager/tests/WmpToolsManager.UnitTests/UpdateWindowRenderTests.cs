@@ -22,6 +22,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using WmpToolsManager.Core;
 using WmpToolsManager.UI;
 using WmpToolsManager.UnitTests.Fakes;
 
@@ -166,6 +167,89 @@ public sealed class UpdateWindowRenderTests
         Assert.True(threadException is null, $"Showing UpdateWindow threw: {threadException}");
         Assert.Equal(0, visibleRollbackButtons);
     }
+
+    [Fact]
+    public async Task UpdateWindowDisablesBothLaunchingButtonsWhileAnApplyIsWaiting()
+    {
+        UpdateScenario scenario = UpdateScenario
+            .WithAvailableUpdate()
+            .WithPendingApply(RecordingProcessLauncher.LaunchedPid, "0.6.0", PendingApply.UpdateKind);
+        scenario.InstallState.PreviousInstallExists = true;
+
+        UpdateViewModel viewModel = new(scenario.Build());
+        await viewModel.CheckAsync();
+
+        Assert.True(viewModel.IsApplyPending);
+
+        Exception? threadException = null;
+        List<string> bindingErrors = [];
+        BindingErrorListener listener = new(bindingErrors);
+        bool? downloadEnabled = null;
+        bool? rollbackEnabled = null;
+        bool? checkEnabled = null;
+        List<string> renderedTexts = [];
+
+        Thread staThread = new(() =>
+        {
+            try
+            {
+                PresentationTraceSources.DataBindingSource.Listeners.Add(listener);
+                PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Warning;
+                PresentationTraceSources.Refresh();
+                try
+                {
+                    UpdateWindow window = new(viewModel)
+                    {
+                        Left = -10000,
+                        Top = -10000,
+                    };
+                    window.Show();
+                    window.UpdateLayout();
+
+                    List<DependencyObject> visualDescendants = [];
+                    CollectVisualDescendants(window, visualDescendants);
+                    List<Button> buttons = [.. visualDescendants.OfType<Button>()];
+                    downloadEnabled = FindButton(buttons, "Download and install")?.IsEnabled;
+                    rollbackEnabled = FindButton(buttons, "Roll back to previous")?.IsEnabled;
+                    checkEnabled = FindButton(buttons, "Check again")?.IsEnabled;
+                    renderedTexts = [.. visualDescendants.OfType<TextBlock>().Select(textBlock => textBlock.Text)];
+
+                    window.Close();
+                }
+                finally
+                {
+                    PresentationTraceSources.DataBindingSource.Listeners.Remove(listener);
+                }
+            }
+            catch (Exception ex)
+            {
+                threadException = ex;
+            }
+            finally
+            {
+                Dispatcher.CurrentDispatcher.InvokeShutdown();
+            }
+        });
+        staThread.SetApartmentState(ApartmentState.STA);
+        staThread.Start();
+        staThread.Join();
+
+        Assert.True(threadException is null, $"Showing UpdateWindow threw: {threadException}");
+        Assert.True(
+            bindingErrors.Count == 0,
+            $"WPF reported data-binding errors while showing UpdateWindow: {string.Join(Environment.NewLine, bindingErrors)}");
+
+        Assert.False(downloadEnabled, "Download and install stayed enabled while an apply was waiting.");
+        Assert.False(rollbackEnabled, "Roll back to previous stayed enabled while an apply was waiting.");
+        Assert.True(checkEnabled, "Check again must stay enabled so the user can re-evaluate.");
+        Assert.Contains(
+            "An update to 0.6.0 is already waiting for Inventor to close (PowerShell process 4242). "
+            + "Close Inventor to let it finish.",
+            renderedTexts);
+    }
+
+    private static Button? FindButton(IEnumerable<Button> buttons, string content) =>
+        buttons.FirstOrDefault(button => string.Equals(button.Content as string, content, StringComparison.Ordinal));
 
     private static void CollectVisualDescendants(DependencyObject root, List<DependencyObject> results)
     {
