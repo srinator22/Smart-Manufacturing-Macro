@@ -29,6 +29,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Gate live evidence freshness
 - Record the live evidence gate task
 - Archive live evidence gate task
+- Record the release-and-updater review verdicts
 
 ### Fixed
 - Guard post-release changelog generation
