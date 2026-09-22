@@ -50,3 +50,46 @@ Entry format (all four fields required):
   asserting the delta stays under 6N.
 - retire-when: the selection view models are deleted or replaced, or the
   workspace adopts a general performance-regression gate that covers them.
+- what happened: The File Naming Manager needed five independent review passes
+  and one GitHub review round before PASS. Every FAIL was a real defect, and
+  most traced back to the advisor's own implementation spec rather than to
+  worker mistakes: companion drawings were outside the Vault and modifiability
+  guards, files outside the project scope were renameable, the root snapshot's
+  external parents were never read, and the parent-modifiability blocker fired
+  for rows that were never renamed. All of these live in the port contracts and
+  the Plan rules, which were written before any code existed and were never
+  reviewed on their own.
+- what check should have caught it: an adversarial review of the spec and port
+  contracts (TASK.md rules, NamingPorts.cs, the blocker list) before
+  implementation, asking "which document can reach RenameDocument, SaveDocument
+  or MoveToOriginals without every stated guard applying to it" - the same
+  questions the post-implementation reviews eventually asked, answered five
+  passes earlier.
+- what was added: nothing mechanized yet. Recorded here as a process lesson;
+  the candidate mechanization is a reviewer step in docs/procedures/ship.md
+  that runs on the spec before the first worker is dispatched for any task
+  that writes, moves or deletes user files.
+- retire-when: two consecutive file-mutating tasks reach PASS in at most two
+  review passes, or the pre-implementation review step is adopted in ship.md.
+
+- what happened: A live Inventor run was the only check that found D7 (parents
+  saved by pre-rename paths); unit tests over a fake gateway could not see it.
+  Later the adapter changed again and the cited smoke log predated the shipped
+  code until a reviewer refused it (B1). Separately, the T3 fix went further
+  than the finding required (drawings dropped from the series maximum) and the
+  tests written alongside it asserted the new behaviour rather than the task's
+  allocation rule, so they passed while contradicting the spec.
+- what check should have caught it: for the first, a gate check that the newest
+  live evidence is newer than the last change to the adapter and Execute path;
+  for the second, tests that quote the spec rule they pin (here TASK.md
+  "highest observed in the project scope + 1") so a reviewer can see when an
+  assertion encodes the implementation instead.
+- what was added: the live smoke harness (.work/jobs/naming-live-smoke, local
+  only) with a cold-reopen check in a second Inventor process, and TEST_PLAN
+  section 1 documenting it; the allocator tests were rewritten to assert the
+  rule. The evidence-freshness check is not mechanized because the harness and
+  its logs are gitignored.
+- retire-when: the smoke harness or an evidence stamp is committed and the gate
+  fails when adapter or Execute sources are newer than the last recorded live
+  run.
+
