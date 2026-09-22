@@ -14,6 +14,7 @@
     <ProjectReference Include="..\SmartManufacturingExporter.Infrastructure\SmartManufacturingExporter.Infrastructure.csproj" />
     <ProjectReference Include="..\SmartManufacturingExporter.InventorAdapter\SmartManufacturingExporter.InventorAdapter.csproj" />
     <ProjectReference Include="..\SmartManufacturingExporter.UI\SmartManufacturingExporter.UI.csproj" />
+    <ProjectReference Include="..\..\..\..\shared\WmpRibbon\WmpRibbon.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="Exists('$(InventorInteropPath)')">

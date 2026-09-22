@@ -22,6 +22,7 @@ public sealed class ProjectBoundaryTests
                 "SmartManufacturingExporter.Infrastructure",
                 "SmartManufacturingExporter.InventorAdapter",
                 "SmartManufacturingExporter.UI",
+                "WmpRibbon",
             ],
         };
 
@@ -103,6 +104,27 @@ public sealed class ProjectBoundaryTests
         Assert.True(
             violations.Length == 0,
             $"Inventor interop usage is restricted to AddIn and InventorAdapter. Violations: {string.Join(", ", violations)}");
+    }
+
+    [Fact]
+    public void OnlyTheSharedRibbonComponentCreatesRibbonTabs()
+    {
+        // Both WMP add-ins share one "WMP Custom Tools" tab. A second RibbonTabs.Add anywhere in a
+        // product's source would silently reintroduce a per-add-in tab; the only permitted call site is
+        // shared/WmpRibbon, so this scans this project's src for the call.
+        string sourceRoot = Path.Combine(FindProjectRoot(), "src");
+        string[] violations = Directory
+            .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("bin", StringComparer.OrdinalIgnoreCase))
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj", StringComparer.OrdinalIgnoreCase))
+            .Where(path => File.ReadAllText(path).Contains("RibbonTabs.Add", StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(sourceRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            $"Ribbon tabs are created only by shared/WmpRibbon. Violations: {string.Join(", ", violations)}");
     }
 
     [Fact]
