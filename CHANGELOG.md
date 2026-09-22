@@ -22,6 +22,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record shared-document selection and open gaps
 - Archive phase 2 hierarchy task
 - Record the file naming task and follow-on work
+- Record the review rounds and follow-on items
 
 ### Fixed
 - Guard post-release changelog generation
@@ -30,6 +31,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Batch tree selection updates
 - Defer hierarchy aggregation
 - Open the window and make every selection truthful
+- Close the review findings on scope, bookkeeping and numbering
 ## [0.1.0] - 2026-09-13
 
 ### Added
