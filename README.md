@@ -29,7 +29,8 @@ in `%LOCALAPPDATA%\WMP\InventorTools\installed.json`, and keeps the install
 it replaced in `%LOCALAPPDATA%\WMP\InventorTools\previous\`. Nothing is
 deleted and no executable is downloaded or launched. Re-running the command
 is safe; it reinstalls the same version over itself. On failure the window
-stays open with the reason and nothing is changed.
+stays open, reports the reason, and states whether anything was changed;
+the add-in files are only replaced after the download has been verified.
 
 Requirements:
 

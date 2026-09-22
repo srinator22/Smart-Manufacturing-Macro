@@ -9,7 +9,7 @@
 #
 #   Core:           measured 92.05% on 2026-09-23 -> 92.05-5=87.05 -> --break-at 85
 #   Application:    measured 92.44% on 2026-09-23 -> 92.44-5=87.44 -> --break-at 85
-#   Infrastructure: measured 76.81% on 2026-09-23 -> 76.81-5=71.81 -> --break-at 70
+#   Infrastructure: measured 77.46% on 2026-09-23 -> 77.46-5=72.46 -> --break-at 70
 #
 # Infrastructure sits lower than the other two on purpose, and the gap is
 # understood rather than tolerated. Its remaining survivors are:

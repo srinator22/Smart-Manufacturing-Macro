@@ -76,8 +76,11 @@ $ProgressPreference = "SilentlyContinue"
 
 $script:DotnetDownloadUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 $script:InventorWaitSeconds = 1800
-# Flipped the moment the Addins root is first touched so a later failure reports the true state.
+# Flipped at the first real mutation of the Addins root so a later failure reports the true state.
+# Archived is a separate fact: a first install touches the root without archiving anything, and
+# pointing that user at -Rollback would promise a previous version that does not exist.
 $script:AddinsRootTouched = $false
+$script:AddinsRootArchived = $false
 
 function Stop-Install {
     # Invoked from every failure path. `exit` inside `iex` (Invoke-Expression) terminates the
@@ -100,11 +103,14 @@ function Stop-Install {
     }
 
     Write-Host $fullMessage -ForegroundColor Red
-    if ($script:AddinsRootTouched) {
+    if (-not $script:AddinsRootTouched) {
+        Write-Host "Nothing was changed. Press Enter to close this message or run the command again after fixing the cause."
+    }
+    elseif ($script:AddinsRootArchived) {
         Write-Host "The install stopped part-way. The previous version is archived under the state root; run the command again, or run it with -Rollback to restore the previous version."
     }
     else {
-        Write-Host "Nothing was changed. Press Enter to close this message or run the command again after fixing the cause."
+        Write-Host "The install stopped part-way and there was no previous install to archive; run the command again after fixing the cause."
     }
     $global:LASTEXITCODE = $Code
     throw $fullMessage
@@ -337,9 +343,28 @@ if ($Rollback) {
     $rolledBackDirectory = Join-Path $previousRoot "$currentVersion-rolledback-$(Get-UtcStamp)"
     New-Item -ItemType Directory -Path $rolledBackDirectory -Force | Out-Null
 
+    # Archiving only the names present in the archive would strand anything the NEWER release added:
+    # a plugin introduced after the archived version would stay installed and loaded by Inventor while
+    # installed.json reported the older version. The current installed.json is the authority on what
+    # this install put in the Addins root, so it is archived first, then the archive's own names.
+    $namesToArchive = @()
+    if ($null -ne $currentState -and $currentState.plugins) {
+        foreach ($recordedPlugin in @($currentState.plugins)) {
+            if ($recordedPlugin.installDirectory) { $namesToArchive += [string]$recordedPlugin.installDirectory }
+            if ($recordedPlugin.manifestName) { $namesToArchive += [string]$recordedPlugin.manifestName }
+        }
+    }
     foreach ($entry in @(Get-ChildItem -LiteralPath $restore.FullName -Force)) {
         if ($entry.Name -eq "installed.json") { continue }
-        Move-IntoArchive -Source (Join-Path $resolvedAddinsRoot $entry.Name) -ArchiveDirectory $rolledBackDirectory
+        $namesToArchive += $entry.Name
+    }
+
+    $seenArchiveNames = @{}
+    foreach ($name in $namesToArchive) {
+        $key = $name.ToLowerInvariant()
+        if ($seenArchiveNames.ContainsKey($key)) { continue }
+        $seenArchiveNames[$key] = $true
+        Move-IntoArchive -Source (Join-Path $resolvedAddinsRoot $name) -ArchiveDirectory $rolledBackDirectory
     }
     if (Test-Path -LiteralPath $installedStatePath) {
         Move-Item -LiteralPath $installedStatePath -Destination (Join-Path $rolledBackDirectory "installed.json") -Force
@@ -363,205 +388,215 @@ if ($Rollback) {
     Write-Output "install: restored '$($restore.Name)' into '$resolvedAddinsRoot'."
     Write-Output "install: the replaced install is archived at '$rolledBackDirectory'."
     Write-Output "install: WMP Inventor Tools $restoredVersion is active."
-    exit 0
-}
-
-# --- preflight ---------------------------------------------------------------
-
-if (-not (Test-DesktopRuntime10)) {
-    Stop-Install -Message "The .NET 10 Desktop runtime (x64) is required; install it from $script:DotnetDownloadUrl and run this again." -Code 3
-}
-
-Assert-InventorClosed
-
-# --- acquire the package -----------------------------------------------------
-
-$stagingRoot = Join-Path $resolvedStateRoot "staging"
-New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
-
-if ($ZipPath -ne "") {
-    if (-not (Test-Path -LiteralPath $ZipPath -PathType Leaf)) {
-        Stop-Install -Message "The package zip '$ZipPath' does not exist." -Code 2
-    }
-    if (-not (Test-Path -LiteralPath $Sha256SumsPath -PathType Leaf)) {
-        Stop-Install -Message "The digest file '$Sha256SumsPath' does not exist." -Code 2
-    }
-
-    $packageZip = [System.IO.Path]::GetFullPath($ZipPath)
-    $packageSums = [System.IO.Path]::GetFullPath($Sha256SumsPath)
-    $zipName = [System.IO.Path]::GetFileName($packageZip)
-    $stagedVersion = "local-$(Get-UtcStamp)"
-    if ($zipName -match "^WmpInventorTools-(.+)\.zip$") {
-        $stagedVersion = $Matches[1]
-    }
-    $stagingDirectory = Join-Path $stagingRoot $stagedVersion
-    New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
 }
 else {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    if ($Version -ne "") {
-        $baseUri = "https://github.com/$Repo/releases/download/v$Version"
+    # --- preflight ---------------------------------------------------------------
+
+    if (-not (Test-DesktopRuntime10)) {
+        Stop-Install -Message "The .NET 10 Desktop runtime (x64) is required; install it from $script:DotnetDownloadUrl and run this again." -Code 3
+    }
+
+    Assert-InventorClosed
+
+    # --- acquire the package -----------------------------------------------------
+
+    $stagingRoot = Join-Path $resolvedStateRoot "staging"
+    New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
+
+    if ($ZipPath -ne "") {
+        if (-not (Test-Path -LiteralPath $ZipPath -PathType Leaf)) {
+            Stop-Install -Message "The package zip '$ZipPath' does not exist." -Code 2
+        }
+        if (-not (Test-Path -LiteralPath $Sha256SumsPath -PathType Leaf)) {
+            Stop-Install -Message "The digest file '$Sha256SumsPath' does not exist." -Code 2
+        }
+
+        $packageZip = [System.IO.Path]::GetFullPath($ZipPath)
+        $packageSums = [System.IO.Path]::GetFullPath($Sha256SumsPath)
+        $zipName = [System.IO.Path]::GetFileName($packageZip)
+        $stagedVersion = "local-$(Get-UtcStamp)"
+        if ($zipName -match "^WmpInventorTools-(.+)\.zip$") {
+            $stagedVersion = $Matches[1]
+        }
+        $stagingDirectory = Join-Path $stagingRoot $stagedVersion
+        New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
     }
     else {
-        $baseUri = "https://github.com/$Repo/releases/latest/download"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        if ($Version -ne "") {
+            $baseUri = "https://github.com/$Repo/releases/download/v$Version"
+        }
+        else {
+            $baseUri = "https://github.com/$Repo/releases/latest/download"
+        }
+
+        $stagingDirectory = Join-Path $stagingRoot "incoming-$(Get-UtcStamp)"
+        New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
+
+        $packageSums = Join-Path $stagingDirectory "SHA256SUMS.txt"
+        Invoke-Download -Uri "$baseUri/SHA256SUMS.txt" -OutFile $packageSums
+
+        $zipName = Get-SumsZipName -SumsFile $packageSums
+        if ($null -eq $zipName) {
+            Stop-Install -Message "SHA256SUMS.txt from '$baseUri' does not list a WmpInventorTools zip." -Code 1
+        }
+
+        $stagedVersion = "unknown"
+        if ($zipName -match "^WmpInventorTools-(.+)\.zip$") {
+            $stagedVersion = $Matches[1]
+        }
+        $versionedStaging = Join-Path $stagingRoot $stagedVersion
+        if (Test-Path -LiteralPath $versionedStaging) {
+            Move-IntoArchive -Source $versionedStaging -ArchiveDirectory (Join-Path $stagingRoot "superseded")
+        }
+        Move-Item -LiteralPath $stagingDirectory -Destination $versionedStaging -Force
+        $stagingDirectory = $versionedStaging
+        $packageSums = Join-Path $stagingDirectory "SHA256SUMS.txt"
+
+        $packageZip = Join-Path $stagingDirectory $zipName
+        Invoke-Download -Uri "$baseUri/$zipName" -OutFile $packageZip
     }
 
-    $stagingDirectory = Join-Path $stagingRoot "incoming-$(Get-UtcStamp)"
-    New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
+    # --- verify ------------------------------------------------------------------
 
-    $packageSums = Join-Path $stagingDirectory "SHA256SUMS.txt"
-    Invoke-Download -Uri "$baseUri/SHA256SUMS.txt" -OutFile $packageSums
-
-    $zipName = Get-SumsZipName -SumsFile $packageSums
-    if ($null -eq $zipName) {
-        Stop-Install -Message "SHA256SUMS.txt from '$baseUri' does not list a WmpInventorTools zip." -Code 1
+    $expectedHash = Get-SumsEntry -SumsFile $packageSums -FileName $zipName
+    if ($null -eq $expectedHash) {
+        Stop-Install -Message "'$packageSums' has no digest for '$zipName'." -Code 5
     }
 
-    $stagedVersion = "unknown"
-    if ($zipName -match "^WmpInventorTools-(.+)\.zip$") {
-        $stagedVersion = $Matches[1]
-    }
-    $versionedStaging = Join-Path $stagingRoot $stagedVersion
-    if (Test-Path -LiteralPath $versionedStaging) {
-        Move-IntoArchive -Source $versionedStaging -ArchiveDirectory (Join-Path $stagingRoot "superseded")
-    }
-    Move-Item -LiteralPath $stagingDirectory -Destination $versionedStaging -Force
-    $stagingDirectory = $versionedStaging
-    $packageSums = Join-Path $stagingDirectory "SHA256SUMS.txt"
-
-    $packageZip = Join-Path $stagingDirectory $zipName
-    Invoke-Download -Uri "$baseUri/$zipName" -OutFile $packageZip
-}
-
-# --- verify ------------------------------------------------------------------
-
-$expectedHash = Get-SumsEntry -SumsFile $packageSums -FileName $zipName
-if ($null -eq $expectedHash) {
-    Stop-Install -Message "'$packageSums' has no digest for '$zipName'." -Code 5
-}
-
-$actualHash = (Get-FileHash -LiteralPath $packageZip -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualHash -ne $expectedHash) {
-    if ($ZipPath -eq "") {
-        # Only a download is ours to quarantine; a caller-supplied zip is left untouched.
-        $quarantine = Join-Path $stagingDirectory "rejected-$(Get-UtcStamp).zip"
-        Move-Item -LiteralPath $packageZip -Destination $quarantine -Force
-        Stop-Install -Message "SHA-256 mismatch for '$zipName': expected $expectedHash, got $actualHash. The rejected download is quarantined at '$quarantine'; do not use it." -Code 5
-    }
-    Stop-Install -Message "SHA-256 mismatch for '$packageZip': expected $expectedHash, got $actualHash. Do not install this file." -Code 5
-}
-
-Unblock-File -LiteralPath $packageZip
-Unblock-File -LiteralPath $packageSums
-
-$packageDirectory = Join-Path $stagingDirectory "package"
-if (Test-Path -LiteralPath $packageDirectory) {
-    Move-IntoArchive -Source $packageDirectory -ArchiveDirectory (Join-Path $stagingDirectory "superseded")
-}
-New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
-Expand-Archive -LiteralPath $packageZip -DestinationPath $packageDirectory -Force
-Get-ChildItem -LiteralPath $packageDirectory -Recurse -File | ForEach-Object { Unblock-File -LiteralPath $_.FullName }
-
-$catalogPath = Join-Path $packageDirectory "catalog.json"
-if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
-    Stop-Install -Message "The package does not contain catalog.json." -Code 1
-}
-$packageInstallerPath = Join-Path $packageDirectory "Install-WmpInventorTools.ps1"
-if (-not (Test-Path -LiteralPath $packageInstallerPath -PathType Leaf)) {
-    Stop-Install -Message "The package does not contain Install-WmpInventorTools.ps1." -Code 1
-}
-$catalog = Get-Content -Raw -LiteralPath $catalogPath | ConvertFrom-Json
-if ($null -eq $catalog.version -or @($catalog.plugins).Count -eq 0) {
-    Stop-Install -Message "catalog.json is malformed; it must declare a version and at least one plugin." -Code 1
-}
-$releaseVersion = [string]$catalog.version
-
-# --- archive the current install --------------------------------------------
-
-$previousState = Read-InstalledState -Path $installedStatePath
-$previousVersion = "unknown"
-if ($null -ne $previousState -and $previousState.version) {
-    $previousVersion = [string]$previousState.version
-}
-
-$archiveDirectory = Join-Path $previousRoot $previousVersion
-if ((Test-Path -LiteralPath $archiveDirectory) -and
-    @(Get-ChildItem -LiteralPath $archiveDirectory -Force).Count -gt 0) {
-    $archiveDirectory = Join-Path $previousRoot "$previousVersion-$(Get-UtcStamp)"
-}
-
-$archivedAnything = $false
-$script:AddinsRootTouched = $true
-foreach ($plugin in @($catalog.plugins)) {
-    $existingDirectory = Join-Path $resolvedAddinsRoot $plugin.installDirectory
-    $existingManifest = Join-Path $resolvedAddinsRoot $plugin.manifestName
-    if (Test-Path -LiteralPath $existingDirectory) {
-        Move-IntoArchive -Source $existingDirectory -ArchiveDirectory $archiveDirectory
-        $archivedAnything = $true
-    }
-    if (Test-Path -LiteralPath $existingManifest -PathType Leaf) {
-        Move-IntoArchive -Source $existingManifest -ArchiveDirectory $archiveDirectory
-        $archivedAnything = $true
-    }
-}
-if ($archivedAnything -and (Test-Path -LiteralPath $installedStatePath -PathType Leaf)) {
-    Copy-Item -LiteralPath $installedStatePath -Destination (Join-Path $archiveDirectory "installed.json") -Force
-}
-
-# --- install -----------------------------------------------------------------
-
-New-Item -ItemType Directory -Path $resolvedAddinsRoot -Force | Out-Null
-$installedPlugins = @()
-foreach ($plugin in @($catalog.plugins)) {
-    $sourceDirectory = Join-Path $packageDirectory $plugin.installDirectory
-    if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
-        Stop-Install -Message "The package is missing the plugin folder '$($plugin.installDirectory)'." -Code 1
+    $actualHash = (Get-FileHash -LiteralPath $packageZip -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualHash -ne $expectedHash) {
+        if ($ZipPath -eq "") {
+            # Only a download is ours to quarantine; a caller-supplied zip is left untouched.
+            $quarantine = Join-Path $stagingDirectory "rejected-$(Get-UtcStamp).zip"
+            Move-Item -LiteralPath $packageZip -Destination $quarantine -Force
+            Stop-Install -Message "SHA-256 mismatch for '$zipName': expected $expectedHash, got $actualHash. The rejected download is quarantined at '$quarantine'; do not use it." -Code 5
+        }
+        Stop-Install -Message "SHA-256 mismatch for '$packageZip': expected $expectedHash, got $actualHash. Do not install this file." -Code 5
     }
 
-    $targetDirectory = Join-Path $resolvedAddinsRoot $plugin.installDirectory
-    New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
-    Copy-Item -Path (Join-Path $sourceDirectory "*") -Destination $targetDirectory -Recurse -Force
+    Unblock-File -LiteralPath $packageZip
+    Unblock-File -LiteralPath $packageSums
 
-    $installedAssembly = Join-Path $targetDirectory $plugin.assembly
-    if (-not (Test-Path -LiteralPath $installedAssembly -PathType Leaf)) {
-        Stop-Install -Message "The plugin assembly '$installedAssembly' was not installed." -Code 1
+    $packageDirectory = Join-Path $stagingDirectory "package"
+    if (Test-Path -LiteralPath $packageDirectory) {
+        Move-IntoArchive -Source $packageDirectory -ArchiveDirectory (Join-Path $stagingDirectory "superseded")
+    }
+    New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+    Expand-Archive -LiteralPath $packageZip -DestinationPath $packageDirectory -Force
+    Get-ChildItem -LiteralPath $packageDirectory -Recurse -File | ForEach-Object { Unblock-File -LiteralPath $_.FullName }
+
+    $catalogPath = Join-Path $packageDirectory "catalog.json"
+    if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
+        Stop-Install -Message "The package does not contain catalog.json." -Code 1
+    }
+    $packageInstallerPath = Join-Path $packageDirectory "Install-WmpInventorTools.ps1"
+    if (-not (Test-Path -LiteralPath $packageInstallerPath -PathType Leaf)) {
+        Stop-Install -Message "The package does not contain Install-WmpInventorTools.ps1." -Code 1
+    }
+    $catalog = Get-Content -Raw -LiteralPath $catalogPath | ConvertFrom-Json
+    if ($null -eq $catalog.version -or @($catalog.plugins).Count -eq 0) {
+        Stop-Install -Message "catalog.json is malformed; it must declare a version and at least one plugin." -Code 1
+    }
+    $releaseVersion = [string]$catalog.version
+
+    # --- archive the current install --------------------------------------------
+
+    $previousState = Read-InstalledState -Path $installedStatePath
+    $previousVersion = "unknown"
+    if ($null -ne $previousState -and $previousState.version) {
+        $previousVersion = [string]$previousState.version
     }
 
-    Write-Manifest `
-        -TemplateFile (Join-Path $packageDirectory ($plugin.addinTemplate -replace "/", "\")) `
-        -ManifestFile (Join-Path $resolvedAddinsRoot $plugin.manifestName) `
-        -AssemblyPath $installedAssembly
+    $archiveDirectory = Join-Path $previousRoot $previousVersion
+    if ((Test-Path -LiteralPath $archiveDirectory) -and
+        @(Get-ChildItem -LiteralPath $archiveDirectory -Force).Count -gt 0) {
+        $archiveDirectory = Join-Path $previousRoot "$previousVersion-$(Get-UtcStamp)"
+    }
 
-    $installedPlugins += [ordered]@{
-        id               = $plugin.id
-        maturity         = $plugin.maturity
-        installDirectory = $plugin.installDirectory
-        manifestName     = $plugin.manifestName
+    $archivedAnything = $false
+    foreach ($plugin in @($catalog.plugins)) {
+        $existingDirectory = Join-Path $resolvedAddinsRoot $plugin.installDirectory
+        $existingManifest = Join-Path $resolvedAddinsRoot $plugin.manifestName
+        if (Test-Path -LiteralPath $existingDirectory) {
+            $script:AddinsRootTouched = $true
+            Move-IntoArchive -Source $existingDirectory -ArchiveDirectory $archiveDirectory
+            $archivedAnything = $true
+            $script:AddinsRootArchived = $true
+        }
+        if (Test-Path -LiteralPath $existingManifest -PathType Leaf) {
+            $script:AddinsRootTouched = $true
+            Move-IntoArchive -Source $existingManifest -ArchiveDirectory $archiveDirectory
+            $archivedAnything = $true
+            $script:AddinsRootArchived = $true
+        }
+    }
+    if ($archivedAnything -and (Test-Path -LiteralPath $installedStatePath -PathType Leaf)) {
+        Copy-Item -LiteralPath $installedStatePath -Destination (Join-Path $archiveDirectory "installed.json") -Force
+    }
+
+    # --- install -----------------------------------------------------------------
+
+    $script:AddinsRootTouched = $true
+    New-Item -ItemType Directory -Path $resolvedAddinsRoot -Force | Out-Null
+    $installedPlugins = @()
+    foreach ($plugin in @($catalog.plugins)) {
+        $sourceDirectory = Join-Path $packageDirectory $plugin.installDirectory
+        if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+            Stop-Install -Message "The package is missing the plugin folder '$($plugin.installDirectory)'." -Code 1
+        }
+
+        $targetDirectory = Join-Path $resolvedAddinsRoot $plugin.installDirectory
+        New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+        Copy-Item -Path (Join-Path $sourceDirectory "*") -Destination $targetDirectory -Recurse -Force
+
+        $installedAssembly = Join-Path $targetDirectory $plugin.assembly
+        if (-not (Test-Path -LiteralPath $installedAssembly -PathType Leaf)) {
+            Stop-Install -Message "The plugin assembly '$installedAssembly' was not installed." -Code 1
+        }
+
+        Write-Manifest `
+            -TemplateFile (Join-Path $packageDirectory ($plugin.addinTemplate -replace "/", "\")) `
+            -ManifestFile (Join-Path $resolvedAddinsRoot $plugin.manifestName) `
+            -AssemblyPath $installedAssembly
+
+        $installedPlugins += [ordered]@{
+            id               = $plugin.id
+            maturity         = $plugin.maturity
+            installDirectory = $plugin.installDirectory
+            manifestName     = $plugin.manifestName
+        }
+    }
+
+    $installedState = [ordered]@{
+        version     = $releaseVersion
+        installedUtc = (Get-Utc).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        plugins     = @($installedPlugins)
+    }
+    New-Item -ItemType Directory -Path $resolvedStateRoot -Force | Out-Null
+    [System.IO.File]::WriteAllText(
+        $installedStatePath,
+        (ConvertTo-Json -InputObject $installedState -Depth 6),
+        [System.Text.UTF8Encoding]::new($false))
+
+    # Rollback needs this script on disk (PhysicalInstallState.FindInstaller), which a one-liner
+    # `irm | iex` install never leaves behind on its own - every install persists its own copy here so
+    # the first rollback anyone runs always has an installer to run.
+    $persistedInstallerPath = Join-Path $resolvedStateRoot "Install-WmpInventorTools.ps1"
+    Copy-Item -LiteralPath $packageInstallerPath -Destination $persistedInstallerPath -Force
+
+    Show-Summary -SummaryVersion $releaseVersion -Plugins @($catalog.plugins) -RollbackCommand $rollbackCommand
+    Write-Output "Add-ins root: $resolvedAddinsRoot"
+    Write-Output "State root:   $resolvedStateRoot"
+    Write-Output "Installer kept at: $persistedInstallerPath"
+    if ($archivedAnything) {
+        Write-Output "Previous install archived at: $archiveDirectory"
     }
 }
 
-$installedState = [ordered]@{
-    version     = $releaseVersion
-    installedUtc = (Get-Utc).ToString("yyyy-MM-ddTHH:mm:ssZ")
-    plugins     = @($installedPlugins)
-}
-New-Item -ItemType Directory -Path $resolvedStateRoot -Force | Out-Null
-[System.IO.File]::WriteAllText(
-    $installedStatePath,
-    (ConvertTo-Json -InputObject $installedState -Depth 6),
-    [System.Text.UTF8Encoding]::new($false))
-
-# Rollback needs this script on disk (PhysicalInstallState.FindInstaller), which a one-liner
-# `irm | iex` install never leaves behind on its own - every install persists its own copy here so
-# the first rollback anyone runs always has an installer to run.
-$persistedInstallerPath = Join-Path $resolvedStateRoot "Install-WmpInventorTools.ps1"
-Copy-Item -LiteralPath $packageInstallerPath -Destination $persistedInstallerPath -Force
-
-Show-Summary -SummaryVersion $releaseVersion -Plugins @($catalog.plugins) -RollbackCommand $rollbackCommand
-Write-Output "Add-ins root: $resolvedAddinsRoot"
-Write-Output "State root:   $resolvedStateRoot"
-Write-Output "Installer kept at: $persistedInstallerPath"
-if ($archivedAnything) {
-    Write-Output "Previous install archived at: $archiveDirectory"
-}
-exit 0
+# Same hazard as Stop-Install: `exit` inside `irm ... | iex` terminates the HOST session, so a
+# successful one-liner install would close the user's window along with its own summary. File mode
+# keeps `exit 0` for callers that read the exit code (the updater's apply step, test-release.sh);
+# in-memory mode falls off the end of the script instead. Both success paths reach this single line,
+# which is why rollback is an `if` branch rather than an early `exit`.
+if ($PSCommandPath) { exit 0 }

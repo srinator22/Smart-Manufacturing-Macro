@@ -77,6 +77,7 @@ shopt -u nullglob
 
 # Step 9b: release packaging contract - builds the plugin catalog package and installs it into an
 # isolated Addins root, verifying digests, idempotence and rollback (ADR-0005).
+bash ./scripts/release/test-build-release.sh
 bash ./scripts/release/test-release.sh
 
 # Step 10: secret scan over Git history and the working tree.

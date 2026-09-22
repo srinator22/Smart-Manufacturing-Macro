@@ -3,7 +3,8 @@
 # Purpose: Produce the single distributable that ADR-0005 defines - dist/WmpInventorTools-<version>.zip
 #   containing one folder per plugin, the raw .addin templates, catalog.json, and the installer - plus
 #   dist/SHA256SUMS.txt.
-# Inputs: -Version (must equal Directory.Build.props VersionPrefix), the plugin catalog files, and the
+# Inputs: -Version (must equal Directory.Build.props VersionPrefix), the plugin catalog files under
+#   -ProjectsRoot (default: <repo>\projects; overridable so tests can point at a fixture tree), and the
 #   Release build output of each add-in project.
 # Outputs: dist/WmpInventorTools-<version>/, dist/WmpInventorTools-<version>.zip, dist/SHA256SUMS.txt.
 # Dependencies: Windows PowerShell 5.1 or later, the .NET SDK pinned by global.json.
@@ -15,6 +16,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
+    [string]$ProjectsRoot,
+
+    [string]$DistRoot,
+
     [switch]$SkipBuild
 )
 
@@ -22,8 +27,15 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    $ProjectsRoot = Join-Path $repoRoot "projects"
+}
+$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $solutionPath = Join-Path $repoRoot "InventorScripts.sln"
-$distRoot = Join-Path $repoRoot "dist"
+if ([string]::IsNullOrWhiteSpace($DistRoot)) {
+    $DistRoot = Join-Path $repoRoot "dist"
+}
+$distRoot = [System.IO.Path]::GetFullPath($DistRoot)
 $stageRoot = Join-Path $distRoot "WmpInventorTools-$Version"
 $zipPath = Join-Path $distRoot "WmpInventorTools-$Version.zip"
 $sumsPath = Join-Path $distRoot "SHA256SUMS.txt"
@@ -55,7 +67,7 @@ if ($Version -ne $versionPrefix) {
 
 # Every project that compiles an add-in host must be in the catalog; a silently skipped project would
 # ship a release that installs fewer plugins than the workspace builds.
-$projectDirectories = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "projects") -Directory | Sort-Object FullName)
+$projectDirectories = @(Get-ChildItem -LiteralPath $ProjectsRoot -Directory | Sort-Object FullName)
 foreach ($projectDirectory in $projectDirectories) {
     $hasAddInProject = @(Get-ChildItem -LiteralPath $projectDirectory.FullName -Recurse -Filter "*.AddIn.csproj").Count -gt 0
     $hasCatalog = Test-Path -LiteralPath (Join-Path $projectDirectory.FullName "plugin.json") -PathType Leaf
@@ -69,7 +81,7 @@ $catalogFiles = @($projectDirectories |
     Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
     Sort-Object)
 if ($catalogFiles.Count -eq 0) {
-    throw "No projects/*/plugin.json catalog files were found under '$repoRoot'."
+    throw "No plugin.json catalog files were found under '$ProjectsRoot'."
 }
 
 $plugins = @()
@@ -106,7 +118,40 @@ foreach ($catalogFile in $catalogFiles) {
         OutputDirectory  = Join-Path (Split-Path -Parent $addinProject) "bin\Release\net10.0-windows"
         TemplatePath     = $templatePath
         ManifestName     = $manifestName
+        CatalogFile      = $catalogFile
     }
+}
+
+# A shared id, installDirectory, or derived manifest name across catalogs is not a schema error the
+# per-field checks above catch, but it silently corrupts staging: two plugins would overwrite each
+# other's staged template or merge their binaries into one installDirectory. Catch it before any
+# build or staging happens so an invalid catalog set never produces a partial dist/ output.
+$idPattern = '^[a-z0-9][a-z0-9-]*$'
+$idOwners = @{}
+$installDirectoryOwners = @{}
+$manifestNameOwners = @{}
+foreach ($plugin in $plugins) {
+    $definition = $plugin.Definition
+    $catalogFile = $plugin.CatalogFile
+
+    if ($definition.id -notmatch $idPattern) {
+        throw "'$catalogFile' declares id '$($definition.id)' which is not a valid id; ids must match '$idPattern'."
+    }
+
+    if ($idOwners.ContainsKey($definition.id)) {
+        throw "Duplicate plugin id '$($definition.id)' found in '$($idOwners[$definition.id])' and '$catalogFile'."
+    }
+    $idOwners[$definition.id] = $catalogFile
+
+    if ($installDirectoryOwners.ContainsKey($definition.installDirectory)) {
+        throw "Duplicate installDirectory '$($definition.installDirectory)' found in '$($installDirectoryOwners[$definition.installDirectory])' and '$catalogFile'."
+    }
+    $installDirectoryOwners[$definition.installDirectory] = $catalogFile
+
+    if ($manifestNameOwners.ContainsKey($plugin.ManifestName)) {
+        throw "Duplicate manifest name '$($plugin.ManifestName)' found in '$($manifestNameOwners[$plugin.ManifestName])' and '$catalogFile'."
+    }
+    $manifestNameOwners[$plugin.ManifestName] = $catalogFile
 }
 
 if (-not $SkipBuild) {

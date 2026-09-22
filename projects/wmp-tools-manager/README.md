@@ -170,7 +170,7 @@ From Git Bash:
 ./scripts/check.sh
 ```
 
-The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. This product's mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 70%, against measured scores of 92.05% / 92.44% / 76.81% on 2026-09-23; `scripts/mutation.sh` records why Infrastructure sits lower and which mutants remain.
+The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. This product's mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 70%, against measured scores of 92.05% / 92.44% / 77.46% on 2026-09-23; `scripts/mutation.sh` records why Infrastructure sits lower and which mutants remain.
 
 Product-local checks:
 
