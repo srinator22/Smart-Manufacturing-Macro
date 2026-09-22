@@ -1,0 +1,145 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Install pinned verification tools
+        shell: pwsh
+        run: |
+          $toolRoot = Join-Path $env:RUNNER_TEMP "inventor-scripts-tools"
+          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+
+          $downloads = @(
+            @{
+              Name = "gitleaks"
+              Uri = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
+              Sha256 = "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+            },
+            @{
+              Name = "git-cliff"
+              Uri = "https://github.com/orhun/git-cliff/releases/download/v2.14.1/git-cliff-2.14.1-x86_64-pc-windows-gnu.zip"
+              Sha256 = "0b9ef3167f25c2357310c71061991f1a8b325ed10ebda59e4233d8601d61f7ef"
+            }
+          )
+
+          foreach ($download in $downloads) {
+            $archive = Join-Path $toolRoot "$($download.Name).zip"
+            $destination = Join-Path $toolRoot $download.Name
+            Invoke-WebRequest -Uri $download.Uri -OutFile $archive
+            $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $download.Sha256) {
+              throw "$($download.Name) SHA-256 mismatch: $actual"
+            }
+            Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+            $executable = Get-ChildItem -LiteralPath $destination -Recurse -Filter "$($download.Name).exe" |
+              Select-Object -First 1
+            if ($null -eq $executable) {
+              throw "$($download.Name).exe was not present in the verified archive"
+            }
+            $executable.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
+      - name: Verify the tag matches the workspace version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          props_version="$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props | head -n1)"
+          if [[ -z "$props_version" ]]; then
+            echo "Directory.Build.props declares no VersionPrefix" >&2
+            exit 1
+          fi
+          if [[ "$tag_version" != "$props_version" ]]; then
+            echo "tag $GITHUB_REF_NAME does not match Directory.Build.props VersionPrefix $props_version" >&2
+            exit 1
+          fi
+          echo "value=$tag_version" >> "$GITHUB_OUTPUT"
+
+      - name: Run the canonical gauntlet
+        shell: bash
+        run: ./scripts/check.sh
+
+      - name: Build the release package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: ./scripts/release/build-release.ps1 -Version $env:RELEASE_VERSION
+
+      - name: Compose the release notes
+        id: notes
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:RELEASE_VERSION
+
+          $section = New-Object System.Collections.Generic.List[string]
+          $inSection = $false
+          foreach ($line in (Get-Content -LiteralPath "CHANGELOG.md")) {
+            if ($line.StartsWith("## [")) {
+              if ($inSection) { break }
+              if ($line.StartsWith("## [$version]")) { $inSection = $true }
+              continue
+            }
+            if ($inSection) { $section.Add($line) }
+          }
+          if ($section.Count -eq 0) {
+            throw "CHANGELOG.md has no section for $version."
+          }
+
+          $catalogPath = "dist/WmpInventorTools-$version/catalog.json"
+          $catalog = Get-Content -Raw -LiteralPath $catalogPath | ConvertFrom-Json
+          $section.Add("")
+          $section.Add("## Plugins in this release")
+          $section.Add("")
+          $section.Add("| Plugin | Name | Maturity |")
+          $section.Add("| --- | --- | --- |")
+          foreach ($plugin in @($catalog.plugins)) {
+            $section.Add("| $($plugin.id) | $($plugin.displayName) | $($plugin.maturity) |")
+          }
+
+          $notesPath = Join-Path $env:RUNNER_TEMP "release-notes-$version.md"
+          [System.IO.File]::WriteAllText(
+            $notesPath,
+            (($section -join "`n").Trim() + "`n"),
+            [System.Text.UTF8Encoding]::new($false))
+          "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Publish the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          NOTES_FILE: ${{ steps.notes.outputs.path }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/WmpInventorTools-${RELEASE_VERSION}.zip" \
+            "dist/SHA256SUMS.txt" \
+            "dist/WmpInventorTools-${RELEASE_VERSION}/Install-WmpInventorTools.ps1" \
+            --title "WMP Inventor Tools ${RELEASE_VERSION}" \
+            --notes-file "$NOTES_FILE"

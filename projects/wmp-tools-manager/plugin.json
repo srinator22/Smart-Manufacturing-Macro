@@ -1,0 +1,15 @@
+{
+  "id": "wmp-tools-manager",
+  "displayName": "WMP Tools Manager",
+  "description": "Check GitHub for a newer WMP Inventor Tools release, verify it, and apply it once Inventor closes.",
+  "maturity": "beta",
+  "addinProject": "src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj",
+  "assembly": "WmpToolsManager.AddIn.dll",
+  "addinTemplate": "packaging/Autodesk.WmpToolsManager.Inventor.addin.template",
+  "installDirectory": "WmpToolsManager",
+  "ribbonPanel": "WMP Tools",
+  "commands": [
+    "Check for updates"
+  ],
+  "homepage": "https://github.com/srinator22/Smart-Manufacturing-Macro/tree/main/projects/wmp-tools-manager"
+}

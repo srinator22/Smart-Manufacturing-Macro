@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <!-- UseWPF switches the SDK's implicit-usings set and drops System.IO; restore it explicitly
+         rather than add a using to every file. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WmpToolsManager.Core\WmpToolsManager.Core.csproj" />
+    <ProjectReference Include="..\..\src\WmpToolsManager.Application\WmpToolsManager.Application.csproj" />
+    <ProjectReference Include="..\..\src\WmpToolsManager.Infrastructure\WmpToolsManager.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\WmpToolsManager.UI\WmpToolsManager.UI.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+{
+  "id": "file-naming-manager",
+  "displayName": "File Naming Manager",
+  "description": "Analyze and apply the WMP part-numbering scheme to the files of the active assembly.",
+  "maturity": "beta",
+  "addinProject": "src/FileNamingManager.AddIn/FileNamingManager.AddIn.csproj",
+  "assembly": "FileNamingManager.AddIn.dll",
+  "addinTemplate": "packaging/Autodesk.FileNamingManager.Inventor.addin.template",
+  "installDirectory": "FileNamingManager",
+  "ribbonPanel": "File Naming",
+  "commands": [
+    "Analyze Naming",
+    "Apply Naming"
+  ],
+  "homepage": "https://github.com/srinator22/Smart-Manufacturing-Macro/tree/main/projects/file-naming-manager"
+}

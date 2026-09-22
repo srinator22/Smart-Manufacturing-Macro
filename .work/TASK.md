@@ -1,33 +1,44 @@
-# Task: {{title}}
-Mode: standard | quick | autopilot
-Branch: {{branch}}
-Date: {{date}}
+# Task: release-and-updater
+Mode: autopilot
+Branch: task/release-and-updater
+Date: 2026-09-23
 
 ## Goal
-{{one paragraph}}
+Make installing and updating the WMP Inventor add-ins a one-step, no-executable process for non-developer users, per ADR-0005: a release workflow that publishes a zip of every plugin plus SHA256SUMS and an in-memory PowerShell installer on each `v*` tag; a data-driven plugin catalog (`plugin.json` per project with a maturity tag) so new and updated plugins flow through packaging, install and update without code changes; and a third add-in, WMP Tools Manager, that offers Check for updates on the shared WMP Custom Tools tab, stages a verified download, and applies it through the same PowerShell script after Inventor exits, keeping the previous install for rollback. Workspace version becomes 0.6.0 and `v0.6.0` is the first published release (human approval given in session on 2026-09-23).
 
 ## Non-goals
-<!-- explicitly out of scope; scope creep gets caught here -->
-- {{out of scope}}
+- Code signing, silent or startup-triggered updates, per-plugin release trains (ADR-0004), running Inventor in CI, bundling the .NET runtime, any Vault interaction.
 
 ## Budget
-<!-- declare before work starts; on exhaustion: stop, keep the best verified
-     artifact, and report unresolved items with reasons - never hide a partial
-     result behind a fluent answer -->
-- Wall-clock: {{max}}
-- Subagents / workflow runs: {{max}}
-- Retries per failing step: {{max, default 2}}
-- Escalate to human when: {{budget exhausted | criteria unreachable | scope exceeds Non-goals}}
+- Wall-clock: one session
+- Subagents / workflow runs: 8
+- Retries per failing step: 2
+- Escalate to human when: the release workflow needs a permission beyond `contents: write` on the release job, or an update path would require deleting user data.
+
+## Design references
+- docs/decisions/0005-release-distribution-and-updater.md (decision)
+- scripts/release/build-release.ps1, Install-WmpInventorTools.ps1, test-release.sh, .github/workflows/release.yml (built before this branch opened; verified locally: package OK, install OK, tampered digest exit 5, idempotent, rollback OK)
+- projects/*/plugin.json (schema: id, displayName, description, maturity, addinProject, assembly, addinTemplate, installDirectory, ribbonPanel, commands, homepage); both existing plugins are beta because no live acceptance is recorded
 
 ## Acceptance criteria
-<!-- each maps to an executable test where possible; list test paths -->
-- [ ] {{criterion}} -> {{test path or "judgment: reason"}}
+- [ ] Every project under projects/ has a valid plugin.json and a catalog check asserts the schema and maturity values. -> test-release.sh or a checker script
+- [ ] build-release.ps1 produces the zip, catalog.json, SHA256SUMS and installer from the catalog alone; test-release.sh asserts contents, hash refusal, idempotence and rollback and runs in the root gate (step 9b). -> gate
+- [ ] The installer never closes the caller's window: under `irm | iex` a failure reports and returns without `exit`; from a file it exits with the documented code. -> test-release.sh cases
+- [ ] WMP Tools Manager builds with 0 warnings, its dialog renders with realized content (render test), version comparison and release parsing are unit-tested with malformed inputs, staging paths are refused outside the state root, the apply command is built exactly, packaging test passes, plugin.json present (beta), and its button sits on the shared tab with a beta-aware tooltip. -> tests, packaging, architecture tests
+- [ ] release.yml is least-privilege (job-level contents: write only), pinned like ci.yml, verifies tag equals VersionPrefix, runs the full gate before packaging, and composes notes from the changelog plus a plugins table with maturity. -> inspection, YAML parse
+- [ ] Root README quick install, CONTRIBUTING prerequisites, ship.md step 8 updated; each project README states its maturity. -> inspection, README contract
+- [ ] Version 0.6.0 in Directory.Build.props and every X.manifest; review PASS; gate green; PR CI and main CI green. -> ship procedure
+- [ ] `v0.6.0` tagged on the merge commit; the release workflow publishes zip, SHA256SUMS and installer; the one-liner installs into an isolated Addins root on this machine and installed.json lists three beta plugins. -> release evidence recorded here
 
 ## Plan
-1. {{step}}
+1. Add-in (WmpToolsManager) and installer exit fix in parallel; register projects; catalog check.
+2. Gate, review, ship.
+3. Tag v0.6.0, watch the release workflow, verify the published one-liner into a temp root, record evidence, retro.
 
 ## Progress log
-<!-- timestamped one-liners; this is what survives compaction -->
+- 2026-09-22T21:30Z - Opened from main a08ef2a. Release tooling, plugin.json files, workflow, root README, CONTRIBUTING and ship.md were produced ahead of the branch (verified green locally); icon assets for the third add-in exist. Version bumped to 0.6.0; test-release.sh wired into the root gate as step 9b. Workers A1 (add-in, Opus) and A2 (installer exit handling, Sonnet) dispatched.
+- 2026-09-22T22:25Z - A2 done: Stop-Install throws under iex, exits from a file; two test cases added. Advisor made the failure line truthful for mid-install failures ($script:AddinsRootTouched). A1 done: projects/wmp-tools-manager (7 projects, GUID 39625833-F960-4BDE-9EB1-F1E7F8F8013B), registered in the sln. A3 done: installer persisted to the state root on every install; add-in prefers it for rollback. build-release.ps1 refuses an add-in project without plugin.json. Backlog row for CONTRIBUTING prerequisites closed.
+- 2026-09-22T22:21Z - Gate 1: all steps green except changelog staleness from the version bump (expected before the commit). Tests 290 + 12 (tools manager), 55 + 6 (exporter), 255 + 9 (naming); packaging OK x3; live-evidence OK; release-test OK (10 cases); no leaks; mutation 92.05 / 92.44 / 77.46 % over thresholds 85 / 85 / 70.
 
 ## Review verdict
 <!-- written ONLY by the independent reviewer -->

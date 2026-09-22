@@ -3,6 +3,22 @@
 This project is operated by coding agents with human direction.
 Contributions follow the same safety and verification rules.
 
+## Local prerequisites
+
+- .NET SDK 10.0.401, pinned by `global.json`. Install the exact version;
+  the restore runs `--locked-mode` and a different SDK fails the gate.
+- `gitleaks` 8.30.1 on PATH for the secret scan in `./scripts/check.sh`.
+- `git-cliff` 2.14.1 on PATH for changelog generation and the changelog
+  freshness check.
+- PowerShell 7 (`pwsh`) on PATH. The per-project packaging tests and
+  `scripts/release/test-release.sh` invoke it; without it those steps stop
+  silently partway through the gate.
+- Autodesk Inventor 2027 with its Developer Tools 19.0.0, required only to
+  build and debug the add-in host projects and to run live acceptance.
+  Core, Application, Infrastructure, and UI build and test without it.
+- Windows 11 x64. `./scripts/check.sh` runs under Git Bash;
+  `scripts\check.cmd` is the native entry point.
+
 - Read AGENTS.md first. The kernel block is hash-pinned: editing it
   requires human approval plus `scripts/kernel-hash.sh --update` in the
   same commit, or CI fails.
