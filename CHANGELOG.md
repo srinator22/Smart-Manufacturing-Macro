@@ -27,6 +27,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record the retro text in the archived task
 - Gate live evidence freshness
 - Record the live evidence gate task
+- Archive live evidence gate task
 
 ### Fixed
 - Guard post-release changelog generation
