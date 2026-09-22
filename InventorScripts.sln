@@ -53,6 +53,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileNamingManager.UI", "pro
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileNamingManager.AddIn", "projects\file-naming-manager\src\FileNamingManager.AddIn\FileNamingManager.AddIn.csproj", "{A60B80A1-E9B2-4388-B101-01569977DC34}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{BB4F672B-7EFF-A858-9F68-1BAEC15A5753}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileNamingManager.LiveSmoke", "projects\file-naming-manager\tools\FileNamingManager.LiveSmoke\FileNamingManager.LiveSmoke.csproj", "{FEE15346-E676-4F90-A1E8-C72A22EE8F31}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -267,6 +271,18 @@ Global
 		{A60B80A1-E9B2-4388-B101-01569977DC34}.Release|x64.Build.0 = Release|Any CPU
 		{A60B80A1-E9B2-4388-B101-01569977DC34}.Release|x86.ActiveCfg = Release|Any CPU
 		{A60B80A1-E9B2-4388-B101-01569977DC34}.Release|x86.Build.0 = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|x64.Build.0 = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Debug|x86.Build.0 = Debug|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|x64.ActiveCfg = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|x64.Build.0 = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|x86.ActiveCfg = Release|Any CPU
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -295,5 +311,7 @@ Global
 		{96E4430E-3DC5-43C5-AFEC-8E78CBF3FA8D} = {A090B48C-B3D7-7B91-3EAD-97147F039390}
 		{4DBD9535-0DB1-4446-97D8-1FC357D0EE8A} = {37D16514-7332-CCF8-F4CE-96AD24C5CA2D}
 		{A60B80A1-E9B2-4388-B101-01569977DC34} = {37D16514-7332-CCF8-F4CE-96AD24C5CA2D}
+		{BB4F672B-7EFF-A858-9F68-1BAEC15A5753} = {CBCBACC1-96FD-7877-E83E-8478E8DD959D}
+		{FEE15346-E676-4F90-A1E8-C72A22EE8F31} = {BB4F672B-7EFF-A858-9F68-1BAEC15A5753}
 	EndGlobalSection
 EndGlobal

@@ -6,7 +6,7 @@ sections 1 to 3. Never run the automated smoke harness against
 
 ## 1. Automated smoke (temp folder, no Vault)
 
-`.work\jobs\naming-live-smoke` starts a hidden Inventor through the
+`tools\FileNamingManager.LiveSmoke` starts a hidden Inventor through the
 `Inventor.Application` ProgID only when no Inventor process exists, builds this
 fixture in `%TEMP%`, runs the adapter, and quits Inventor:
 
@@ -40,7 +40,38 @@ Harness caveats observed on 2026-09-23: `Documents.CloseAll(true)` did not close
 the fixture documents, so the reopen check attests to in-session state, not a
 cold read from disk; a cold reopen needs a second Inventor process. The
 harness also reads part and assembly templates from the active project's
-template folder (read-only); it writes nothing outside `%TEMP%`.
+template folder (read-only); it writes nothing outside `%TEMP%` except the
+evidence stamp.
+
+### Evidence stamp and refresh
+
+The harness takes no arguments and writes its log to
+`%TEMP%\naming-live-smoke\smoke-<stamp>.log`, which stays local. On `SMOKE PASS`
+it writes `tests\live-evidence\LIVE_EVIDENCE.json` with `recordedUtc`,
+`inventorDisplayName`, `sourceHash`, `assertionsPassed`, `assertionsFailed`,
+`result` and `harnessVersion`, and nothing else: no path, host or user name.
+`sourceHash` is the SHA-256 of the ordinally sorted `<relativePath>:<gitBlobId>`
+lines, joined by LF, for every `src\FileNamingManager.InventorAdapter` source,
+`src\FileNamingManager.Application\FileNamingWorkflow.cs`, and the harness's own
+`Program.cs`; `harnessVersion` is that last blob id on its own.
+
+`scripts\check-live-evidence.sh` recomputes the same hash with `git hash-object`
+and fails the gate when it differs, when the stamp is missing, or when its
+`result` is not `PASS`. `scripts\check.sh` runs it after the packaging test, so
+touching the adapter or the Execute path without a fresh live run is red.
+
+Refresh it by closing every Inventor window and running, from the repository
+root on a machine with Inventor 2027:
+
+```bash
+bash projects/file-naming-manager/scripts/run-live-smoke.sh
+```
+
+That script refuses to start while `tasklist` shows `Inventor.exe`, builds the
+harness in Debug, runs it under a 900 s timeout, propagates the exit code, and
+prints the refreshed stamp. Commit the stamp with the source change that made it
+stale. On a machine without the interop assembly the harness still compiles and
+prints `UNCLAIMED: Autodesk.Inventor.Interop not installed` with exit code 2.
 
 ## 2. Interactive - unmanaged new files inside a checked-out assembly
 

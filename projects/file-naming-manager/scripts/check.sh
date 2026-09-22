@@ -9,3 +9,5 @@ command -v pwsh >/dev/null 2>&1 \
   || { echo "CHECK FAILED: pwsh is required for the add-in packaging test" >&2; exit 1; }
 
 pwsh -NoProfile -File projects/file-naming-manager/scripts/test-packaging.ps1
+
+bash projects/file-naming-manager/scripts/check-live-evidence.sh

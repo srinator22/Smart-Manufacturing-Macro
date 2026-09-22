@@ -1,12 +1,14 @@
 // Purpose: Enforce the File Naming Manager project dependency direction and host-boundary rules mechanically.
-// Inputs: The csproj files under this project's src folder, the shared ribbon project, and Directory.Build.props.
-// Outputs: Failing tests when a reference crosses a boundary, interop leaks past the host adapters, or the
-//   activation manifest version drifts from VersionPrefix.
+// Inputs: The csproj files under this project's src folder, the shared ribbon project,
+//   Directory.Build.props, and the committed live evidence stamp under tests/live-evidence.
+// Outputs: Failing tests when a reference crosses a boundary, interop leaks past the host adapters, the
+//   activation manifest version drifts from VersionPrefix, or the live evidence stamp leaks local paths.
 // Dependencies: System.Xml.Linq and the on-disk repository layout only; no product project references.
 // Assumptions: Tests run from the build output directory beneath the repository, so ancestors are searched
 //   for InventorScripts.sln and this project's docs/ARCHITECTURE.md.
 // Validation source: projects/file-naming-manager/docs/ARCHITECTURE.md "Modules and dependency direction".
 
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -83,6 +85,8 @@ public sealed class ProjectBoundaryTests
     [Fact]
     public void InventorInteropUsageStaysInsideHostAdapters()
     {
+        // Scope is src only: tools/FileNamingManager.LiveSmoke is the deliberate exception, a developer
+        // harness that drives Inventor directly and ships in no artifact.
         string sourceRoot = Path.Combine(FindProjectRoot(), "src");
         string[] allowedDirectories =
         [
@@ -211,6 +215,48 @@ public sealed class ProjectBoundaryTests
             .ToArray();
         Assert.Contains(@"..\..\assets\file-naming-16.png", addInResources);
         Assert.Contains(@"..\..\assets\file-naming-32.png", addInResources);
+    }
+
+    [Fact]
+    public void LiveEvidenceStampCarriesNoLocalPaths()
+    {
+        // The stamp is the only committed product of a live Inventor run. It is written on a
+        // workstation whose paths and user name must never reach the repository, so the gate asserts
+        // the shape and the absence of anything machine-specific rather than trusting the writer.
+        string stampPath = Path.Combine(FindProjectRoot(), "tests", "live-evidence", "LIVE_EVIDENCE.json");
+        Assert.True(File.Exists(stampPath), $"The live evidence stamp is missing: {stampPath}");
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(stampPath));
+        JsonElement stamp = document.RootElement;
+        Assert.Equal(JsonValueKind.Object, stamp.ValueKind);
+
+        string[] requiredFields =
+        [
+            "recordedUtc",
+            "inventorDisplayName",
+            "sourceHash",
+            "assertionsPassed",
+            "assertionsFailed",
+            "result",
+            "harnessVersion",
+        ];
+
+        string[] actualFields = stamp.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(requiredFields.Order(StringComparer.Ordinal), actualFields);
+
+        Assert.Equal("PASS", stamp.GetProperty("result").GetString());
+
+        string[] forbidden = ["\\", "/Users/", "C:", Environment.UserName];
+        foreach (JsonProperty property in stamp.EnumerateObject())
+        {
+            string value = property.Value.ToString();
+            foreach (string needle in forbidden)
+            {
+                Assert.False(
+                    !string.IsNullOrEmpty(needle) && value.Contains(needle, StringComparison.OrdinalIgnoreCase),
+                    $"The live evidence stamp leaks a local detail: {property.Name} contains '{needle}'.");
+            }
+        }
     }
 
     private static string FindProjectRoot()
