@@ -51,7 +51,7 @@ Findings the analyzer must report, each present in the real P124 folder: duplica
 - [x] Packaging installs and uninstalls the second add-in in an isolated Addins root, and the activation manifest version matches VersionPrefix. -> gate step 9 reports `packaging: OK` for both projects; `ActivationManifestVersionMatchesVersionPrefix` and `AddInManifestTemplateAndServerShareOneClientId` green
 - [x] Mutation testing covers Core and Application with enforced thresholds. -> scripts/mutation.sh Evidence: Core 92.68 at 85, Application 94.32 at 85, Infrastructure 97.87 at 90 (2026-09-23)
 - [x] README with all required sections, ARCHITECTURE, compatibility matrix, live TEST_PLAN including the Vault procedure, catalog row, BACKLOG updated. -> check-project-readmes.sh reports OK for 2 projects; VAULT_RENAME_DESIGN.md added as the record of the deferred managed-rename procedure
-- [x] A live smoke test against generated fixtures in a temp folder (never the Vault workspace), run only if no Inventor process exists, renames a two-level assembly and reopens it with resolved references; if it cannot run, that is recorded as unclaimed. -> `.work/jobs/naming-live-smoke/smoke-20260922T165242Z.log` SMOKE PASS on the final build in Inventor 2027 build 310192060: external-parent blocker fired live with a second open assembly and stayed silent after it closed; four renames, four originals archived, cold reopen in a fresh process with HasReferencesMissing false and Part Numbers 901-A001, 901-A002, 901-0005, 901-0006
+- [x] A live smoke test against generated fixtures in a temp folder (never the Vault workspace), run only if no Inventor process exists, renames a two-level assembly and reopens it with resolved references; if it cannot run, that is recorded as unclaimed. -> `.work/jobs/naming-live-smoke/smoke-20260922T174443Z.log` SMOKE PASS on the final build in Inventor 2027 build 310192060: external-parent blocker fired live with a second open assembly and stayed silent after it closed; four renames, four originals archived, cold reopen in a fresh process with HasReferencesMissing false and Part Numbers 901-A001, 901-A002, 901-0005, 901-0006
 - [ ] Version bumped to 0.5.0, changelog regenerated, independent review PASS, gate green, PR CI and exact-main CI green. -> ship procedure
 
 ## Plan
@@ -86,19 +86,24 @@ Findings the analyzer must report, each present in the real P124 folder: duplica
 
 - 2026-09-22T16:55Z - Fourth review pass PASS. Full gate on the WP1e tree: 298 tests, both packaging tests OK, no leaks, all five mutation runs above threshold, changelog stamp the only stale item before commit. Proceeding to commit and ship.
 
-## Review verdict
-PASS (2026-09-23, independent reviewer, fourth pass, fresh context)
+- 2026-09-22T17:13Z - Pushed 4730970, PR #11 opened, CI terminal-success for that SHA. Merge blocked by four unresolved GitHub review threads, all confirmed legitimate: T1 referenced files outside the project scope can be proposed and their originals archived outside the root via `..` relative paths; T2 a model rename that succeeds before a companion or Part Number failure loses its bookkeeping; T3 same-stem companion drawings count as duplicate numbers; T4 an exhausted series throws out of Analyze. Dispatched WP1f with failing-first tests; smoke re-run and re-review follow before the threads are answered.
 
-Four passes were needed; the first three each returned FAIL on real defects, all fixed failing-first:
+- 2026-09-22T17:45Z - WP1f landed (255 naming tests; Core 92.92, Application 94.89, Infrastructure 97.92): out-of-scope referenced files never proposed and archival refuses paths that escape the root; model rename bookkeeping recorded before companions and Part Number, with partial results carrying ModelRenamed; drawings no longer own numbers; exhausted series reported instead of thrown. Smoke re-run on this tree: SMOKE PASS (smoke-20260922T174443Z), 52 assertions, both phases, cold reopen clean. Fifth review and full gate in progress; the four GitHub threads are answered after they land.
+
+## Review verdict
+PASS (2026-09-23, independent reviewer, fifth pass, fresh context, WP1g tree)
+
+Five review passes plus one GitHub review round were needed. Every FAIL was on a real defect and every defect was fixed with a failing test first:
 - Pass 1 (R1-R5): companion drawings bypassed the Vault and modifiability guards; archival not per-item isolated with the manifest written last; a number without a description invisible to allocation; allocation before the option gate; README claims ahead of evidence.
 - Pass 2 (F1, F2): the root snapshot's external parents were never read; the tool's own `_renamed-originals` folder re-entered the scanned scope.
-- Pass 3 (B1, B2): the live smoke evidence predated the shipped adapter; the parent-modifiability blocker fired for Vault-managed rows whose parents are never saved.
-- Pass 4 PASS: B2 closed at the planner and pinned in both directions; B1 closed by `smoke-20260922T165242Z.log` on the final build, which proves the external-parent guard live with a second open assembly and the clean path with a cold reopen in a fresh Inventor process. Residuals closed with tests. Verified clean: no test, gate, threshold or assertion deleted, skipped or weakened; no new dependency; no secrets; `.work/jobs` gitignored.
-- One non-blocking display observation from pass 4 closed before commit: the external-parent row reason now appears only on rows the analysis proposed a name for.
+- Pass 3 (B1, B2): the live smoke evidence predated the shipped adapter; the parent-modifiability blocker fired for Vault-managed rows.
+- Pass 4: PASS on the pre-PR tree.
+- GitHub review (T1-T4): referenced files outside the project scope could be renamed and archived outside the root; a model rename that succeeded before a companion or Part Number failure lost its bookkeeping; companion drawings counted as duplicate numbers; an exhausted series threw out of Analyze.
+- Pass 5: T1, T2, T4 verified closed; the T3 fix had over-reached by dropping drawings from the series maximum (a lone `124-0080 X.idw` would have let 0080 be reissued) - repaired so drawings raise the maximum but are never duplicates of their model, with tests asserting the TASK.md rule rather than the implementation. PASS.
 
-Found and fixed along the way by rendering and running rather than by review: D6 (grid showed the analysis preview, not the plan) and D7 (parents saved by pre-rename paths, found only by the live Inventor run).
+Found by rendering and by running rather than by review: D6 (grid showed the analysis preview) and D7 (parents saved by pre-rename paths). Live evidence: `smoke-20260922T174443Z.log` SMOKE PASS on the WP1f build, accepted for WP1g because the change is Core-pure and the fixture contains no drawing.
 
-Not verified by the reviewer and carried by the advisor's gate runs: 229 + 8 + 6 + 55 tests, 0 warnings, format and analyzers clean, mutation 92.68 / 94.91 / 97.92 above 85 / 85 / 90, packaging OK for both add-ins, no leaks.
+Not verified by the reviewer and carried by the advisor's gate runs: 255 / 8 / 6 / 55 tests, 0 warnings, format and analyzers clean, mutation thresholds 85 / 85 / 90, packaging OK for both add-ins, no leaks.
 
 ## Retro
 <!-- filled by docs/procedures/retro.md -->
