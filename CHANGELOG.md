@@ -40,6 +40,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Open the window and make every selection truthful
 - Close the review findings on scope, bookkeeping and numbering
 - Keep the console open on success and report install state truthfully
+- Validate catalog paths, archive dropped plugins, probe the x64 runtime, allow one pending apply
 ## [0.1.0] - 2026-09-13
 
 ### Added
