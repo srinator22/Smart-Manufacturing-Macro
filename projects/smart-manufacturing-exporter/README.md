@@ -1,8 +1,8 @@
 # Smart Manufacturing Exporter
 
-Smart Manufacturing Exporter `0.5.0` is a Windows add-in for Autodesk Inventor 2027. It presents a recursive assembly tree and exports an explicit selection of unique part and assembly documents as STEP files with a chosen spline-fit precision.
+Smart Manufacturing Exporter `0.6.0` is a Windows add-in for Autodesk Inventor 2027. It presents a recursive assembly tree and exports an explicit selection of unique part and assembly documents as STEP files with a chosen spline-fit precision.
 
-Phases 1 and 2 are ready for live Inventor testing. Compilation, automated tests, and packaging are verified by the repository gate; live three-level hierarchy and assembly-export acceptance remain unclaimed until exercised in Inventor 2027.
+Maturity: `beta` (`plugin.json`). Phases 1 and 2 are ready for live Inventor testing. Compilation, automated tests, and packaging are verified by the repository gate; live three-level hierarchy and assembly-export acceptance remain unclaimed until exercised in Inventor 2027, which is why the plugin is tagged beta.
 
 ## What it does
 
@@ -81,6 +81,8 @@ dotnet test InventorScripts.sln -c Release --no-build --no-restore
 ```
 
 ## Install
+
+End users install every WMP plugin, including this one, with the one-line command in the [workspace README](../../README.md#quick-install); the steps below are the developer path from a local build.
 
 Close Inventor before replacing add-in files. From the repository root in PowerShell, restore, build, and install the Release configuration:
 

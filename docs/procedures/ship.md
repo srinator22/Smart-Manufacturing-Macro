@@ -24,12 +24,18 @@ SHA is terminal-success (kernel rule 5).
    required check for the exact SHA is terminal-success. On failure:
    inspect logs, fix the root cause, verify locally, push the replacement,
    monitor the replacement SHA.
-8. Release, when a coherent wave ships: move the version, create the
-   annotated tag `vX.Y.Z`, push the tag, AND create the platform Release
-   object (`gh release create`) with user-facing plain-language notes
-   curated from the changelog. A tag alone does not appear in the Releases
-   panel. Template-repo releases (before start runs) use annotated
-   `template-vX.Y.Z` tags; per-project releases after start use `vX.Y.Z`.
+8. Release, when a coherent wave ships: releases are produced by
+   `.github/workflows/release.yml`, not by hand. The human creates the
+   annotated tag `vX.Y.Z` on the merged SHA and pushes it; the workflow
+   refuses any tag whose version does not equal `Directory.Build.props`
+   VersionPrefix, runs the full gate, packages every `projects/*/plugin.json`
+   plugin, and calls `gh release create` with notes built from the
+   CHANGELOG section plus a plugins-and-maturity table. Assets published:
+   `WmpInventorTools-<version>.zip`, `SHA256SUMS.txt`, and
+   `Install-WmpInventorTools.ps1`. Watch the release run to terminal state
+   like any other push (step 7); a tag alone is not a release.
+   Template-repo releases (before start runs) still use annotated
+   `template-vX.Y.Z` tags and are cut by hand.
 9. Final handoff format: Outcome / Evidence (commands and terminal results)
    / Artifacts (commit, release, deployment) / Limitations / Next action
    only if required.

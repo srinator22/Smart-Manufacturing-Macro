@@ -1,0 +1,15 @@
+{
+  "id": "smart-manufacturing-exporter",
+  "displayName": "Smart Manufacturing Exporter",
+  "description": "Review and export selected manufacturing parts from an Inventor assembly.",
+  "maturity": "beta",
+  "addinProject": "src/SmartManufacturingExporter.AddIn/SmartManufacturingExporter.AddIn.csproj",
+  "assembly": "SmartManufacturingExporter.AddIn.dll",
+  "addinTemplate": "packaging/Autodesk.SmartManufacturingExporter.Inventor.addin.template",
+  "installDirectory": "SmartManufacturingExporter",
+  "ribbonPanel": "Smart Export",
+  "commands": [
+    "Smart Export"
+  ],
+  "homepage": "https://github.com/srinator22/Smart-Manufacturing-Macro/tree/main/projects/smart-manufacturing-exporter"
+}

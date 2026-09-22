@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity name="FileNamingManager.AddIn" version="0.5.0.0" />
+  <assemblyIdentity name="FileNamingManager.AddIn" version="0.6.0.0" />
   <clrClass clsid="{BB7F1BFF-D45E-440A-897B-F70E6A4ADE67}"
             progid="FileNamingManager.AddIn.StandardAddInServer"
             threadingModel="Both"

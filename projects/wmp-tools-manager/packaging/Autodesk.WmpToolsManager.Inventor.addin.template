@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Addin Type="Standard">
+  <ClassId>{39625833-F960-4BDE-9EB1-F1E7F8F8013B}</ClassId>
+  <ClientId>{39625833-F960-4BDE-9EB1-F1E7F8F8013B}</ClientId>
+  <DisplayName>WMP Tools Manager</DisplayName>
+  <Description>Check GitHub for a newer WMP Inventor Tools release, verify it, and apply it once Inventor closes.</Description>
+  <Assembly>__ASSEMBLY_PATH__</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionEqualTo>31..</SupportedSoftwareVersionEqualTo>
+  <DataVersion>1</DataVersion>
+  <UserInterfaceVersion>1</UserInterfaceVersion>
+</Addin>

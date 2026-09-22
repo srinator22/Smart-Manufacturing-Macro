@@ -1,8 +1,8 @@
 # File Naming Manager
 
-File Naming Manager `0.5.0` is a Windows add-in for Autodesk Inventor 2027. It analyzes the files of the active assembly against the WMP part-numbering scheme, allocates the next free numbers, previews a rename plan, and applies that plan through Inventor's own `SaveAs` so references stay intact.
+File Naming Manager `0.6.0` is a Windows add-in for Autodesk Inventor 2027. It analyzes the files of the active assembly against the WMP part-numbering scheme, allocates the next free numbers, previews a rename plan, and applies that plan through Inventor's own `SaveAs` so references stay intact.
 
-Live rename behaviour is verified only by the temp-folder smoke harness described in [docs/TEST_PLAN.md](docs/TEST_PLAN.md). Renaming Vault-managed (checked-in) files is not implemented in v1: those files are detected, planned, and exported to a Vault rename plan for manual execution in Vault Explorer. The full design and the reason execution is deferred are recorded in [docs/VAULT_RENAME_DESIGN.md](docs/VAULT_RENAME_DESIGN.md).
+Maturity: `beta` (`plugin.json`). Live rename behaviour is verified only by the temp-folder smoke harness described in [docs/TEST_PLAN.md](docs/TEST_PLAN.md); acceptance on a real project has not been recorded, which is why the plugin is tagged beta. Renaming Vault-managed (checked-in) files is not implemented in v1: those files are detected, planned, and exported to a Vault rename plan for manual execution in Vault Explorer. The full design and the reason execution is deferred are recorded in [docs/VAULT_RENAME_DESIGN.md](docs/VAULT_RENAME_DESIGN.md).
 
 ## What it does
 
@@ -40,6 +40,8 @@ The add-in never silently saves, renames, moves, or deletes a document that is n
 - `gitleaks` 8.30.1 and `git-cliff` 2.14.1 for the full local gauntlet
 
 ## Install
+
+End users install every WMP plugin, including this one, with the one-line command in the [workspace README](../../README.md#quick-install); the steps below are the developer path from a local build.
 
 Close Inventor before replacing add-in files. From the repository root in PowerShell, restore, build, and install the Release configuration:
 

@@ -12,6 +12,59 @@ Future product concepts are recorded in [IDEAS.md](IDEAS.md). Logged ideas are n
 | --- | --- | --- |
 | [Smart Manufacturing Exporter](projects/smart-manufacturing-exporter/README.md) | C#/.NET WPF add-in | Phase 1 MVP implemented; live Inventor acceptance pending |
 
+## Quick install
+
+Close Inventor, open Windows PowerShell, and run:
+
+```powershell
+irm https://github.com/srinator22/Smart-Manufacturing-Macro/releases/latest/download/Install-WmpInventorTools.ps1 | iex
+```
+
+The command downloads the latest `WmpInventorTools-<version>.zip` and its
+`SHA256SUMS.txt`, verifies the SHA-256 digest, clears the downloaded-file
+mark, and installs every plugin in the release under
+`%APPDATA%\Autodesk\Inventor 2027\Addins\`. It writes one `.addin` manifest
+per plugin pointing at the files it just copied, records what it installed
+in `%LOCALAPPDATA%\WMP\InventorTools\installed.json`, and keeps the install
+it replaced in `%LOCALAPPDATA%\WMP\InventorTools\previous\`. Nothing is
+deleted and no executable is downloaded or launched. Re-running the command
+is safe; it reinstalls the same version over itself. On failure the window
+stays open, reports the reason, and states whether anything was changed;
+the add-in files are only replaced after the download has been verified.
+
+Requirements:
+
+- Autodesk Inventor 2027, closed while the installer runs
+- .NET 10 Desktop runtime x64 - the installer stops and prints
+  <https://dotnet.microsoft.com/download/dotnet/10.0> when it is missing
+
+### Update
+
+Use the **Check for updates** command on the **WMP Custom Tools** ribbon
+tab (WMP Tools Manager). It downloads the latest release, verifies its
+SHA-256 digest, and applies it after Inventor closes; the replaced install
+is archived for rollback. Re-running the Quick install command above does
+the same from outside Inventor.
+
+### Roll back
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/srinator22/Smart-Manufacturing-Macro/releases/latest/download/Install-WmpInventorTools.ps1))) -Rollback
+```
+
+This restores the most recently archived install from
+`%LOCALAPPDATA%\WMP\InventorTools\previous\` and archives the install it
+replaced. Inventor must be closed.
+
+### What "beta" means
+
+A plugin marked `beta` builds, passes the full workspace gate, and has no
+recorded live acceptance run inside Autodesk Inventor. Treat its output as
+unverified: check exported files and renamed documents before relying on
+them, and keep a backup of any assembly you point it at. Every plugin in
+the current release is `beta`; each project's `plugin.json` carries the
+maturity and each project README states it.
+
 ## Workspace layout
 
 ```text

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity name="WmpToolsManager.AddIn" version="0.6.0.0" />
+  <clrClass clsid="{39625833-F960-4BDE-9EB1-F1E7F8F8013B}"
+            progid="WmpToolsManager.AddIn.StandardAddInServer"
+            threadingModel="Both"
+            name="WmpToolsManager.AddIn.StandardAddInServer"
+            runtimeVersion="" />
+  <file name="WmpToolsManager.AddIn.dll" hashalg="SHA1" />
+</assembly>
