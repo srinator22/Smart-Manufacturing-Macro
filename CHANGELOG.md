@@ -24,6 +24,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record the file naming task and follow-on work
 - Record the review rounds and follow-on items
 - Archive file naming manager task
+- Record the retro text in the archived task
 
 ### Fixed
 - Guard post-release changelog generation
