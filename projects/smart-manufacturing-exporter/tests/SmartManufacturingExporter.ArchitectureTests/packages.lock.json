@@ -105,7 +105,8 @@
           "SmartManufacturingExporter.Application": "[0.4.0, )",
           "SmartManufacturingExporter.Infrastructure": "[0.4.0, )",
           "SmartManufacturingExporter.InventorAdapter": "[0.4.0, )",
-          "SmartManufacturingExporter.UI": "[0.4.0, )"
+          "SmartManufacturingExporter.UI": "[0.4.0, )",
+          "WmpRibbon": "[0.4.0, )"
         }
       },
       "smartmanufacturingexporter.application": {
@@ -137,6 +138,9 @@
           "SmartManufacturingExporter.Application": "[0.4.0, )",
           "SmartManufacturingExporter.Core": "[0.4.0, )"
         }
+      },
+      "wmpribbon": {
+        "type": "Project"
       }
     }
   }

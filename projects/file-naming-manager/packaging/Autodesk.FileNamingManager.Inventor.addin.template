@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Addin Type="Standard">
+  <ClassId>{BB7F1BFF-D45E-440A-897B-F70E6A4ADE67}</ClassId>
+  <ClientId>{BB7F1BFF-D45E-440A-897B-F70E6A4ADE67}</ClientId>
+  <DisplayName>File Naming Manager</DisplayName>
+  <Description>Analyze and apply the WMP part-numbering scheme to the files of the active assembly.</Description>
+  <Assembly>__ASSEMBLY_PATH__</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionEqualTo>31..</SupportedSoftwareVersionEqualTo>
+  <DataVersion>1</DataVersion>
+  <UserInterfaceVersion>1</UserInterfaceVersion>
+</Addin>

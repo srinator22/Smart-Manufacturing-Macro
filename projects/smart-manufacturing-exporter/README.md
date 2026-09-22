@@ -1,12 +1,12 @@
 # Smart Manufacturing Exporter
 
-Smart Manufacturing Exporter `0.4.0` is a Windows add-in for Autodesk Inventor 2027. It presents a recursive assembly tree and exports an explicit selection of unique part and assembly documents as STEP files with a chosen spline-fit precision.
+Smart Manufacturing Exporter `0.5.0` is a Windows add-in for Autodesk Inventor 2027. It presents a recursive assembly tree and exports an explicit selection of unique part and assembly documents as STEP files with a chosen spline-fit precision.
 
 Phases 1 and 2 are ready for live Inventor testing. Compilation, automated tests, and packaging are verified by the repository gate; live three-level hierarchy and assembly-export acceptance remain unclaimed until exercised in Inventor 2027.
 
 ## What it does
 
-- Adds a Smart Export command to the Inventor Assembly ribbon.
+- Adds a Smart Export command to the shared WMP Custom Tools tab on the Inventor Assembly ribbon.
 - Requires a saved assembly to be the active document.
 - Recursively scans saved Inventor part and assembly occurrences.
 - Excludes suppressed occurrences and their descendants, unresolved documents, and unsupported document types.
@@ -113,7 +113,7 @@ Then:
 1. Start Autodesk Inventor 2027.
 2. Open Inventor's Add-In Manager and confirm Smart Manufacturing Exporter is loaded.
 3. Open a saved `.iam` assembly.
-4. Confirm the Smart Export tab and Smart Export command appear in the Assembly ribbon.
+4. Confirm the WMP Custom Tools tab and Smart Export command appear in the Assembly ribbon.
 
 If Inventor reports a load error or the command does not appear, stop and use the troubleshooting table below before testing exports.
 
@@ -196,7 +196,7 @@ The script validates and removes only this add-in's per-user manifest and binary
 | --- | --- | --- |
 | Add-in is absent from the Add-In Manager | Confirm the two paths in Verify installation exist and the manifest points to the installed DLL. | Close Inventor, rebuild, rerun the installer, and restart Inventor 2027. |
 | Inventor reports an add-in load error | Confirm this is Inventor 2027 and the `net10.0-windows` x64 build completed without errors. | Run `scripts\check.cmd`, reinstall the matching Release or Debug output, and retain the exact load message if it persists. |
-| Smart Export tab is missing | Confirm Smart Manufacturing Exporter is loaded and a saved assembly is active. | Activate a `.iam` document. Restart Inventor after the first installation if needed. |
+| WMP Custom Tools tab is missing | Confirm Smart Manufacturing Exporter is loaded and a saved assembly is active. | Activate a `.iam` document. Restart Inventor after the first installation if needed. |
 | The tree is empty or missing expected content | The chosen scope may exclude that document kind or depth; suppressed branches are intentionally skipped. | Check the scope, suppression state, and whether each source document is saved and resolved. |
 | Destination is rejected | The folder must already exist and grant permission to add files. | Create or choose a writable folder owned by the current user. |
 | Export is blocked by an existing file | Phase 1 never overwrites an existing `.step`. | Choose a new empty destination or manually move the old output after confirming it is safe to do so. |

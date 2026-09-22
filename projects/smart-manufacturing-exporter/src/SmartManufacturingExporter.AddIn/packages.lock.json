@@ -31,6 +31,9 @@
           "SmartManufacturingExporter.Application": "[0.4.0, )",
           "SmartManufacturingExporter.Core": "[0.4.0, )"
         }
+      },
+      "wmpribbon": {
+        "type": "Project"
       }
     }
   }

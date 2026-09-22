@@ -1,7 +1,8 @@
-// Purpose: Supply Inventor 2027's COM add-in entry point and the Assembly ribbon boundary.
+// Purpose: Supply Inventor 2027's COM add-in entry point; the Smart Export command lives on the
+//   shared WMP Custom Tools ribbon tab rather than an exporter-owned tab.
 // Inputs: Inventor activation lifecycle and retained button OnExecute events.
 // Outputs: One Smart Export ribbon command delegating to SmartExportCommand.
-// Dependencies: Inventor interop, Phase 1 adapters, workflow, and WPF host.
+// Dependencies: Inventor interop, Phase 1 adapters, workflow, WPF host, and the shared WmpRibbon tab.
 // Assumptions: Inventor owns activation and callback threading; firstTime controls UI creation.
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
@@ -16,6 +17,7 @@ using SmartManufacturingExporter.AddIn.Phase1;
 using SmartManufacturingExporter.Application.Phase1;
 using SmartManufacturingExporter.Infrastructure.Phase1;
 using SmartManufacturingExporter.InventorAdapter.Phase1;
+using WmpRibbon;
 
 namespace SmartManufacturingExporter.AddIn;
 
@@ -28,7 +30,6 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     public const string ClientId = "{A77D6A17-82A7-45C9-93C6-E6FA4EB91E73}";
 
     private const string ButtonInternalName = "SmartManufacturingExporter.SmartExportButton";
-    private const string TabInternalName = "SmartManufacturingExporter.SmartExportTab";
     private const string PanelInternalName = "SmartManufacturingExporter.SmartExportPanel";
 
     private Inventor.Application? inventorApplication;
@@ -71,15 +72,8 @@ public sealed class StandardAddInServer : ApplicationAddInServer
 
         if (FirstTime)
         {
-            Ribbon assemblyRibbon = inventorApplication.UserInterfaceManager.Ribbons["Assembly"];
-            RibbonTab tab = assemblyRibbon.RibbonTabs.Add(
-                "Smart Export",
-                TabInternalName,
-                ClientId);
-            RibbonPanel panel = tab.RibbonPanels.Add(
-                "Smart Export",
-                PanelInternalName,
-                ClientId);
+            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "Smart Export", PanelInternalName, ClientId);
             panel.CommandControls.AddButton(buttonDefinition, true, true);
         }
     }

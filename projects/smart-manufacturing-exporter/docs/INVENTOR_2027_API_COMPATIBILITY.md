@@ -33,7 +33,9 @@ live-host behavior.
 | Generic document | `ComponentDefinition.Document`, `Document.FullFileName`, `Document.DocumentType`, `Document.Close(bool)` | Installed interop XML |
 | Command definition | `ControlDefinitions.AddButtonDefinition(string, string, CommandTypesEnum, object, string, string, object, object, ButtonDisplayEnum)` | Installed interop XML |
 | Ribbon | `RibbonTabs.Add(string, string, string, string, bool, bool)` | Installed interop XML |
+| Ribbon | `RibbonTabs.Item(object)` | Installed interop XML |
 | Ribbon | `RibbonPanels.Add(string, string, string, string, bool)` | Installed interop XML |
+| Ribbon | `RibbonPanels.Item(object)` | Installed interop XML |
 | Command placement | `CommandControls.AddButton(ButtonDefinition, bool, bool, string, bool)` | Installed interop XML |
 | Translator | `TranslatorAddIn.HasSaveCopyAsOptions` | Installed interop XML |
 | Translator | `TranslatorAddIn.SaveCopyAs(object, TranslationContext, NameValueMap, DataMedium)` | Installed interop XML |
@@ -53,6 +55,7 @@ live-host behavior.
 - The exporter uses the installed STEP translator identity above and its `SaveCopyAs` contract for selected `.ipt` and `.iam` documents.
 - A source document is opened invisibly only when it is not already open and is closed with `Close(true)` only when the exporter opened it.
 - Low, Medium, and Highest map to `export_fit_tolerance` values `0.001`, `0.0001`, and `0.00001` centimeters respectively. Lower values increase spline approximation accuracy and can increase file size.
+- The Smart Export command lives on the shared `WMP Custom Tools` ribbon tab (`shared/WmpRibbon`). This add-in owns only its own `Smart Export` panel on that tab; it never creates a second tab and never deletes the shared tab.
 
 ## Deferred live-host verification
 
