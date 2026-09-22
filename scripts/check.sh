@@ -75,8 +75,9 @@ for project_check in projects/*/scripts/check.sh; do
 done
 shopt -u nullglob
 
-# Step 9b: release packaging contract - builds the plugin catalog package and installs it into an
-# isolated Addins root, verifying digests, idempotence and rollback (ADR-0005).
+# Step 9b: release packaging contract (ADR-0005) - first the catalog validation against fixture
+# trees (duplicate ids, folders, manifests), then the real package installed into an isolated
+# Addins root, verifying digests, idempotence, rollback and the console-safe failure paths.
 bash ./scripts/release/test-build-release.sh
 bash ./scripts/release/test-release.sh
 

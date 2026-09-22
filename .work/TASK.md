@@ -44,5 +44,9 @@ Make installing and updating the WMP Inventor add-ins a one-step, no-executable 
 ## Review verdict
 <!-- written ONLY by the independent reviewer -->
 
+Round 1 (2026-09-22T22:40Z, reviewer agent, Opus, read-only): FAIL - 1 blocker (success `exit 0` closes the console under `irm | iex`), 3 should-fix (part-way failure message claimed an archive that did not exist; test-release.sh pinned two plugins instead of the requirement; no catalog uniqueness check in build-release.ps1), 3 nits (README "nothing is changed"; rollback stranded a newer-release-only plugin; stale mutation figure).
+
+Round 2 (2026-09-22T23:05Z, same reviewer): PASS - all seven findings verified fixed in the working tree, each with a test that fails without the fix; no regression (file mode still exits 2 and 5), no test or gate removed, no new dependency, no secrets. Non-blocking: step 9b comment in check.sh described one script (fixed by the advisor after the verdict); rollback moves paths named by installed.json in the user's own %LOCALAPPDATA%, archived not deleted.
+
 ## Retro
 <!-- filled by docs/procedures/retro.md -->
