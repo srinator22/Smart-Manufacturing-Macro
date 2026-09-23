@@ -2,7 +2,8 @@
 //   skipped before allocation, so it produces no operation, no Vault instruction, and no blocker, and it
 //   never consumes a number the next row would otherwise have been given.
 // Inputs: Synthetic ActiveAssemblySnapshot fixtures over the fake gateway, file system, and clock.
-// Outputs: Assertions on RenamePlan.Operations, RenamePlan.VaultInstructions, and the allocated numbers.
+// Outputs: Assertions on RenamePlan.Operations, RenamePlan.VaultInstructions, RenamePlan.BlockedPaths,
+//   and the allocated numbers.
 // Dependencies: FileNamingManager.Application, FileNamingManager.Core, and this project's fakes.
 // Assumptions: RenameOptions.ExcludedPaths is compared case-insensitively, because the paths come from a
 //   view model that got them from Inventor and Windows paths differ only in case.
@@ -149,5 +150,104 @@ public class FileNamingExclusionTests
 
         Assert.Empty(excluded.Blockers);
         Assert.Empty(excluded.Operations);
+    }
+
+    /// <summary>
+    /// The blocked row has to be identifiable, not only described in prose. A row blocked by its companion
+    /// drawing appears in neither Operations nor VaultInstructions, so the only way the grid can keep the
+    /// one control that clears the blocker - that row's own include box - live is for the plan to say which
+    /// path it blocked (review finding P1). The unaffected row keeps its operation either way.
+    /// </summary>
+    [Fact]
+    public void ARowBlockedByAReadOnlyCompanionIsNamedInBlockedPathsAndClearsWhenExcluded()
+    {
+        FakeInventorNamingGateway gateway = new();
+        FakeNamingFileSystem fileSystem = new();
+        FileNamingWorkflow workflow = new(gateway, fileSystem, new FakeClock());
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 GRM (main assembly).iam");
+        string alphaPath = Path.Combine(ProjectRoot, "Alpha Bracket.ipt");
+        string alphaDrawingPath = Path.Combine(ProjectRoot, "Alpha Bracket.idw");
+        string bravoPath = Path.Combine(ProjectRoot, "Bravo Bracket.ipt");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(alphaPath, DocumentKind.Part, parents: [rootPath]),
+                Doc(bravoPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, alphaPath, alphaDrawingPath, bravoPath]);
+        fileSystem.MarkReadOnly(alphaDrawingPath);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+
+        RenamePlan blocked = workflow.Plan(analysis, Project124, new RenameOptions());
+
+        Assert.NotEmpty(blocked.Blockers);
+        Assert.DoesNotContain(blocked.Operations, operation => operation.CurrentFullPath == alphaPath);
+        Assert.Empty(blocked.VaultInstructions);
+        Assert.Contains(alphaPath, blocked.BlockedPaths);
+        Assert.Contains(blocked.Operations, operation => operation.CurrentFullPath == bravoPath);
+
+        RenamePlan excluded = workflow.Plan(
+            analysis,
+            Project124,
+            new RenameOptions { ExcludedPaths = [alphaPath] });
+
+        Assert.Empty(excluded.Blockers);
+        Assert.Empty(excluded.BlockedPaths);
+        RenameOperation survivor = Assert.Single(excluded.Operations);
+        Assert.Equal(bravoPath, survivor.CurrentFullPath);
+        Assert.Equal("124-0001 Bravo Bracket.ipt", Path.GetFileName(survivor.NewFullPath));
+    }
+
+    /// <summary>
+    /// Same contract on the external-parent guard, the other place Plan drops a row from both lists while
+    /// blocking on it. A row the plan acts on is deliberately absent from BlockedPaths: its checkbox is
+    /// already live because it has an action, and listing it would blur what BlockedPaths means.
+    /// </summary>
+    [Fact]
+    public void ARowBlockedByAnExternalParentIsNamedInBlockedPathsAndOthersAreNot()
+    {
+        FakeInventorNamingGateway gateway = new();
+        FakeNamingFileSystem fileSystem = new();
+        FileNamingWorkflow workflow = new(gateway, fileSystem, new FakeClock());
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 GRM (main assembly).iam");
+        string alphaPath = Path.Combine(ProjectRoot, "Alpha Bracket.ipt");
+        string bravoPath = Path.Combine(ProjectRoot, "Bravo Bracket.ipt");
+        string externalParentPath = Path.Combine(ProjectRoot, "OtherAssembly.iam");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                new(alphaPath, DocumentKind.Part, false, true, false, false, [rootPath], [externalParentPath], null),
+                Doc(bravoPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, alphaPath, bravoPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(Project124);
+
+        RenamePlan blocked = workflow.Plan(analysis, Project124, new RenameOptions());
+
+        Assert.NotEmpty(blocked.Blockers);
+        Assert.Equal(alphaPath, Assert.Single(blocked.BlockedPaths));
+        Assert.DoesNotContain(blocked.Operations, operation => operation.CurrentFullPath == alphaPath);
+        Assert.Contains(blocked.Operations, operation => operation.CurrentFullPath == bravoPath);
+
+        RenamePlan excluded = workflow.Plan(
+            analysis,
+            Project124,
+            new RenameOptions { ExcludedPaths = [alphaPath] });
+
+        Assert.Empty(excluded.Blockers);
+        Assert.Empty(excluded.BlockedPaths);
+        Assert.Equal(bravoPath, Assert.Single(excluded.Operations).CurrentFullPath);
     }
 }

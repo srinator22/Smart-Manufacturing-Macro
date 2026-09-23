@@ -556,6 +556,63 @@ public class FileNamingViewModelTests
     }
 
     /// <summary>
+    /// A blocked row is in neither Operations nor VaultInstructions, so its Action is None - but unticking
+    /// it is exactly what clears its blocker and lets the unaffected rows run. A checkbox disabled on
+    /// "Action is None" took that away and left the operator with a plan they could not unblock from the
+    /// window at all (review finding P1).
+    /// </summary>
+    [Fact]
+    public void ABlockedRowStaysToggleableAndExcludingItClearsTheBlockerAndEnablesApply()
+    {
+        FakeInventorNamingGateway gateway = new();
+        FakeNamingFileSystem fileSystem = new();
+        FileNamingWorkflow workflow = new(gateway, fileSystem, new FakeClock());
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 GRM (main assembly).iam");
+        string blockedPartPath = Path.Combine(ProjectRoot, "Bracket.ipt");
+        string cleanPartPath = Path.Combine(ProjectRoot, "Widget.ipt");
+        string externalParentPath = Path.Combine(ProjectRoot, "OtherAssembly.iam");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(blockedPartPath, DocumentKind.Part, parents: [rootPath], externalParents: [externalParentPath]),
+                Doc(cleanPartPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, blockedPartPath, cleanPartPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(null);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        NamingRowViewModel blockedRow = Assert.Single(viewModel.Rows, r => r.CurrentFileName == "Bracket.ipt");
+
+        Assert.Equal("None", blockedRow.Action);
+        Assert.True(blockedRow.HasBlocker);
+        Assert.True(
+            blockedRow.CanToggle,
+            "A row the plan blocked must stay toggleable: excluding it is the only way to clear its blocker.");
+        Assert.NotEmpty(viewModel.Blockers);
+        Assert.False(viewModel.CanApply);
+
+        blockedRow.IsIncluded = false;
+
+        Assert.Empty(viewModel.Blockers);
+        Assert.False(blockedRow.HasBlocker);
+        Assert.True(blockedRow.CanToggle, "An excluded row must stay toggleable so the operator can undo it.");
+        Assert.Equal(1, viewModel.OperationCount);
+        Assert.True(viewModel.CanApply);
+
+        blockedRow.IsIncluded = true;
+
+        Assert.NotEmpty(viewModel.Blockers);
+        Assert.True(blockedRow.HasBlocker);
+        Assert.True(blockedRow.CanToggle);
+        Assert.False(viewModel.CanApply);
+    }
+
+    /// <summary>
     /// A canonical row has nothing to include or exclude, so its checkbox must be disabled rather than
     /// offering the operator a toggle that changes nothing.
     /// </summary>
@@ -570,6 +627,7 @@ public class FileNamingViewModelTests
 
         Assert.Equal("None", rootRow.Action);
         Assert.True(rootRow.IsIncluded);
+        Assert.False(rootRow.HasBlocker);
         Assert.False(rootRow.CanToggle);
     }
 

@@ -3,7 +3,8 @@
 // Inputs: The NamingAnalysisRow captured at analysis time (identity/state only), plus a RenamePlan and
 //   RenameOptions supplied on every re-plan via Refresh().
 // Outputs: Read-only display strings plus the two-way IsIncluded flag; ProposedFileName/Action/Reasons/
-//   CanToggle raise PropertyChanged so the DataGrid updates in place without reopening the window.
+//   HasBlocker/CanToggle raise PropertyChanged so the DataGrid updates in place without reopening the
+//   window.
 // Dependencies: FileNamingManager.Application, FileNamingManager.Core (for the enum ToString() values).
 // Assumptions: A row must never claim an action the current plan will not perform - showing VaultRename
 //   or a proposed name for a defect class the operator has left unchecked is the same class of bug as a
@@ -14,7 +15,10 @@
 //   RenameUnnumbered for UnnumberedDescription/LegacyPrefix/CopySuffix), mirroring FileNamingWorkflow.Plan.
 //   IsIncluded is the operator's own per-row gate and defaults to true for every row; a row the plan would
 //   do nothing with is disabled through CanToggle rather than started unticked, because "unticked" has to
-//   keep meaning "the operator took this out" and nothing else.
+//   keep meaning "the operator took this out" and nothing else. A row the plan BLOCKS on is not such a
+//   row: Plan leaves it out of Operations and VaultInstructions, so it reads Action None while being the
+//   one row whose exclusion clears the blocker. RenamePlan.BlockedPaths names it, Refresh() turns that
+//   into HasBlocker, and CanToggle keeps its box live (review finding P1).
 // Validation source: .work/TASK.md UI acceptance criterion; FileNamingWorkflow.Plan's gating switch;
 //   FileNamingViewModelTests.
 
@@ -41,6 +45,7 @@ public sealed class NamingRowViewModel : INotifyPropertyChanged
     private string action = nameof(RenameAction.None);
     private string reasons;
     private bool isIncluded = true;
+    private bool hasBlocker;
 
     public NamingRowViewModel(NamingAnalysisRow row)
     {
@@ -113,13 +118,40 @@ public sealed class NamingRowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// False for a row the current plan would do nothing with, so its checkbox is disabled rather than
-    /// offering a toggle that changes nothing. An already-excluded row always stays toggleable: excluding
-    /// a row sets its Action to None, so a plain "Action is None" test would disable the very checkbox the
-    /// operator needs to undo the exclusion with, and trap the row out of the plan for good.
+    /// True when the current plan raised a blocker against this row's own path and therefore left it out
+    /// of both Operations and VaultInstructions (RenamePlan.BlockedPaths). Such a row shows Action None
+    /// while being the one row whose exclusion clears that blocker, which is why it feeds CanToggle.
+    /// </summary>
+    public bool HasBlocker
+    {
+        get => hasBlocker;
+        private set
+        {
+            if (hasBlocker == value)
+            {
+                return;
+            }
+
+            hasBlocker = value;
+            OnPropertyChanged(nameof(HasBlocker));
+            OnPropertyChanged(nameof(CanToggle));
+        }
+    }
+
+    /// <summary>
+    /// False only for a row excluding which would change nothing: out of scope, a drawing following its
+    /// model, or a correctly named file with no blocker. True whenever the exclusion would change the
+    /// plan - the row is already excluded, the plan acts on it, or the plan blocks on it. An
+    /// already-excluded row always stays toggleable: excluding a row sets its Action to None, so a plain
+    /// "Action is None" test would disable the very checkbox the operator needs to undo the exclusion
+    /// with. A blocked row is the same trap seen from the other side: the plan drops it from Operations
+    /// and VaultInstructions, so "Action is None" disabled the only control that clears its blocker and
+    /// left the operator unable to run the rows the blocker does not touch (review finding P1).
     /// </summary>
     public bool CanToggle =>
-        !isIncluded || !string.Equals(action, nameof(RenameAction.None), StringComparison.Ordinal);
+        !isIncluded
+        || hasBlocker
+        || !string.Equals(action, nameof(RenameAction.None), StringComparison.Ordinal);
 
     public string Reasons
     {
@@ -138,6 +170,7 @@ public sealed class NamingRowViewModel : INotifyPropertyChanged
 
         if (plan is null)
         {
+            HasBlocker = false;
             ProposedFileName = string.Empty;
             Action = nameof(RenameAction.None);
             Reasons = InvalidProjectReason;
@@ -147,13 +180,18 @@ public sealed class NamingRowViewModel : INotifyPropertyChanged
         if (!isIncluded)
         {
             // Plan skipped this row before it built a proposal, so it appears in neither Operations nor
-            // VaultInstructions. Say why here rather than fall through to the option-gate and
-            // external-parent reasons below, none of which is the reason this row is doing nothing.
+            // VaultInstructions and raises no blocker of its own - it can never be in BlockedPaths, and a
+            // stale flag would outlive the plan that set it. Say why here rather than fall through to the
+            // option-gate and external-parent reasons below, none of which is the reason this row is
+            // doing nothing.
+            HasBlocker = false;
             ProposedFileName = string.Empty;
             Action = nameof(RenameAction.None);
             Reasons = string.Join("; ", row.Reasons.Append(OperatorExcludedReason));
             return;
         }
+
+        HasBlocker = plan.BlockedPaths.Any(PathsMatch);
 
         foreach (RenameOperation operation in plan.Operations)
         {

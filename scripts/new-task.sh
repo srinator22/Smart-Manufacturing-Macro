@@ -5,14 +5,24 @@
 set -euo pipefail
 
 # Detects whether the Project decisions "Git workflow" line records
-# direct-to-main as the chosen workflow. Matches only the recorded choice
-# itself (the text right after "- Git workflow:"), not incidental mentions
-# of "direct-to-main" elsewhere in the sentence (e.g. "direct-to-main is not
-# a standing choice"). A template placeholder ("{{...}}") is never treated
-# as a recorded choice.
+# direct-to-main as the chosen workflow. Matches only an explicit
+# direct-to-main choice: after stripping "- Git workflow:" and whitespace,
+# the value must be exactly "direct-to-main" (case-insensitive), or
+# "direct-to-main" immediately followed by a trailing-clause marker
+# (one of ; . : ( , or " - ", with at most one optional space before it).
+# It must NOT be followed by a space and a word (e.g. "is", "to", "was"),
+# which is a sentence about direct-to-main, not the choice itself (e.g.
+# "direct-to-main is not a standing choice"). A template placeholder
+# ("{{...}}") is never treated as a recorded choice.
 workflow_is_direct_to_main() {
   local agents_file="$1"
-  local line value lower
+  local line value lower rest
+  # Regex patterns are kept in variables (not inlined in [[ =~ ]]) because
+  # bash parses "(" and ";" as shell syntax, not regex metacharacters, when
+  # they appear unquoted directly inside a [[ ... ]] conditional.
+  local word_after_space_re='^[[:space:]]+[a-z0-9]'
+  local trailing_clause_re='^[[:space:]]?[;.:,(]'
+  local dash_clause_re='^ - '
 
   line="$(grep -E '^- Git workflow:' "$agents_file" | head -n 1 || true)"
   [[ -n "$line" ]] || return 1
@@ -23,7 +33,26 @@ workflow_is_direct_to_main() {
   [[ "$value" != \{\{* ]] || return 1
 
   lower="${value,,}"
-  [[ "$lower" == direct-to-main* ]]
+  [[ "$lower" == direct-to-main* ]] || return 1
+
+  rest="${lower#direct-to-main}"
+
+  # Exact match: nothing trails "direct-to-main".
+  [[ -z "$rest" ]] && return 0
+
+  # Disqualify: a space then a word character means this is a sentence
+  # about direct-to-main (e.g. "is not permitted", "to a solo repository"),
+  # not the recorded choice.
+  [[ "$rest" =~ $word_after_space_re ]] && return 1
+
+  # Allowed trailing-clause punctuation, with or without one leading space
+  # (e.g. "direct-to-main;", "direct-to-main (solo repository, ...)").
+  [[ "$rest" =~ $trailing_clause_re ]] && return 0
+
+  # Allowed " - " separator (e.g. "direct-to-main - solo repository").
+  [[ "$rest" =~ $dash_clause_re ]] && return 0
+
+  return 1
 }
 
 main() {

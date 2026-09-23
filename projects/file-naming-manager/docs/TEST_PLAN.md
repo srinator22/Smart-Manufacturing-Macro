@@ -90,7 +90,11 @@ prints `UNCLAIMED: Autodesk.Inventor.Interop not installed` with exit code 2.
 5. Confirm the Include box is disabled on a row whose action is None, for
    example an already-canonical numbered part. Select none, then confirm the
    plan is empty and those disabled rows are still ticked. Select all, then
-   confirm the two rows from step 2 are proposed again.
+   confirm the two rows from step 2 are proposed again. Set up the external
+   reference of section 3 step 6, then confirm that the blocked row keeps its
+   Include box enabled even though its action reads None, and that unticking
+   exactly that row clears the blocker while the other rows keep their
+   operations and Apply becomes available.
 6. With at least one Vault-managed file in the assembly, untick its Include
    box and select `Export Vault plan`. Confirm the exported file carries no
    instruction for that file, and that ticking it again brings the

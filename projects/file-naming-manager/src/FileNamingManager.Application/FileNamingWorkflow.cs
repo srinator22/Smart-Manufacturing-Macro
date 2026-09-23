@@ -101,6 +101,11 @@ public sealed class FileNamingWorkflow
 
         List<RenameOperation> operations = [];
         List<VaultRenameInstruction> vaultInstructions = [];
+
+        // The rows blocked by identity below. They appear in neither Operations nor VaultInstructions, so
+        // the caller cannot find them by what the plan would do and can only offer the operator the one
+        // control that clears the blocker - that row's exclusion - if the plan names the path (P1).
+        HashSet<string> blockedPaths = new(StringComparer.OrdinalIgnoreCase);
         HashSet<NumberSeries> exhaustedSeriesNeeded = [];
         Dictionary<string, List<string>> targetOwners = new(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> proposedNameOwners = new(StringComparer.OrdinalIgnoreCase);
@@ -232,6 +237,7 @@ public sealed class FileNamingWorkflow
             // and this row cannot safely do either while an outside reference to it is unaccounted for.
             if (AddExternalParentBlockers(blockers, row, companionDrawings))
             {
+                blockedPaths.Add(row.FullPath);
                 continue;
             }
 
@@ -247,6 +253,7 @@ public sealed class FileNamingWorkflow
             // alone would leave the untouched drawing resolving to an archived original.
             if (AddCompanionBlockers(blockers, row, companionDrawings))
             {
+                blockedPaths.Add(row.FullPath);
                 continue;
             }
 
@@ -284,7 +291,10 @@ public sealed class FileNamingWorkflow
             OrderLeafFirst(vaultInstructions, instruction => instruction.CurrentFullPath, rowsByPath, depths);
         List<string> parentSaveOrder = ComputeParentSaveOrder(orderedOperations, depths);
 
-        return new RenamePlan(analysis.ProjectRootPath ?? string.Empty, orderedOperations, blockers, orderedVaultInstructions, parentSaveOrder);
+        return new RenamePlan(analysis.ProjectRootPath ?? string.Empty, orderedOperations, blockers, orderedVaultInstructions, parentSaveOrder)
+        {
+            BlockedPaths = blockedPaths,
+        };
     }
 
     public RenameExecution Execute(RenamePlan plan)

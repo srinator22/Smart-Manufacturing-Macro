@@ -29,6 +29,24 @@ field() {
 
 [[ -f "$STAMP" ]] || fail "LIVE EVIDENCE MISSING: $STAMP does not exist. $REFRESH"
 
+# field() below extracts values with a regex, not a JSON parser: a truncated document (a
+# stray closing brace missing) or a value wrapped in a top-level array still contains the
+# right substrings and would otherwise be accepted. PowerShell 7 (pwsh) is already required
+# by this gate, so ConvertFrom-Json performs a real syntax check - and -NoEnumerate keeps a
+# single-element array from being silently unwrapped into what looks like a bare object -
+# before any field extracted below is trusted.
+STAMP_PATH="$STAMP" pwsh -NoProfile -Command '
+  try {
+    $raw = Get-Content -Raw -LiteralPath $env:STAMP_PATH -ErrorAction Stop
+    $parsed = ConvertFrom-Json -InputObject $raw -NoEnumerate -ErrorAction Stop
+    if ($parsed -is [System.Array]) { exit 1 }
+    exit 0
+  } catch {
+    exit 1
+  }
+' >/dev/null 2>&1 \
+  || fail "LIVE EVIDENCE MALFORMED: $STAMP is not valid JSON. $REFRESH"
+
 result="$(field result)"
 [[ -n "$result" ]] || fail "LIVE EVIDENCE MALFORMED: $STAMP has no result field. $REFRESH"
 [[ "$result" == "PASS" ]] \

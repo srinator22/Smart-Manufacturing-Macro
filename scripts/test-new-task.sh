@@ -31,10 +31,20 @@ expect_true() {
 # (a) the real, recorded workflow is branch + gated merge, not direct-to-main.
 expect_false "real AGENTS.md" "$ROOT/AGENTS.md"
 
-# (b) an explicit direct-to-main choice.
+# (b) an explicit direct-to-main choice with a trailing parenthetical clause.
 direct_file="$fixture_dir/direct.md"
-printf '%s\n' '- Git workflow: direct-to-main to a solo repository' > "$direct_file"
-expect_true "explicit direct-to-main choice" "$direct_file"
+printf '%s\n' '- Git workflow: direct-to-main (solo repository, no PR gate)' > "$direct_file"
+expect_true "explicit direct-to-main choice with trailing clause" "$direct_file"
+
+# (b2) the bare choice with nothing trailing at all.
+bare_file="$fixture_dir/bare.md"
+printf '%s\n' '- Git workflow: direct-to-main' > "$bare_file"
+expect_true "bare direct-to-main choice" "$bare_file"
+
+# (b3) the bare choice (mixed case) followed immediately by a semicolon clause.
+semicolon_file="$fixture_dir/semicolon.md"
+printf '%s\n' '- Git workflow: Direct-to-main; solo owner' > "$semicolon_file"
+expect_true "direct-to-main choice with semicolon clause" "$semicolon_file"
 
 # (c) branch + gated merge, with "direct-to-main" only mentioned incidentally later
 # in the sentence - this is the exact false-positive the old grep matched.
@@ -46,5 +56,18 @@ expect_false "incidental mention of direct-to-main" "$mention_file"
 placeholder_file="$fixture_dir/placeholder.md"
 printf '%s\n' '- Git workflow: {{branch + gated merge | direct-to-main}}' > "$placeholder_file"
 expect_false "template placeholder" "$placeholder_file"
+
+# (e) a negated decision: "direct-to-main" is discussed and rejected, not chosen.
+# Before the fix, the prefix-only check ("$lower" == direct-to-main*) matched this
+# and wrongly stayed on the current branch against the recorded workflow.
+negated_file="$fixture_dir/negated.md"
+printf '%s\n' '- Git workflow: direct-to-main is not permitted; use branch plus gated merge' > "$negated_file"
+expect_false "negated direct-to-main decision" "$negated_file"
+
+# (f) "direct-to-main" starts the sentence but is followed by a word, not a
+# trailing-clause marker - a sentence about direct-to-main, not the choice itself.
+sentence_file="$fixture_dir/sentence.md"
+printf '%s\n' '- Git workflow: direct-to-main to a solo repository' > "$sentence_file"
+expect_false "direct-to-main followed by a word, not a clause marker" "$sentence_file"
 
 echo "new-task-test: OK"
