@@ -522,6 +522,153 @@ public class FileNamingViewModelTests
         Assert.True(instructionIndex < blockersHeaderIndex, "Expected the blockers section after the instructions.");
     }
 
+    /// <summary>
+    /// Rows are plan-derived, so an excluded row has to go through a real re-plan: the operation really
+    /// disappears from the plan the Apply button would execute, not just from the row's own display.
+    /// </summary>
+    [Fact]
+    public void ExcludingARowDropsItsOperationAndTogglingBackRestoresIt()
+    {
+        (FileNamingWorkflow workflow, _, _, NamingAnalysis analysis) = BuildFixture(includeVaultManagedPart: false);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        NamingRowViewModel row = Assert.Single(viewModel.Rows, r => r.CurrentFileName == "Bracket.ipt");
+
+        Assert.True(row.IsIncluded);
+        Assert.True(row.CanToggle);
+        Assert.Equal(1, viewModel.OperationCount);
+
+        row.IsIncluded = false;
+
+        Assert.Equal(0, viewModel.OperationCount);
+        Assert.Equal("None", row.Action);
+        Assert.Equal(string.Empty, row.ProposedFileName);
+        Assert.Equal("Excluded by the operator.", row.Reasons);
+        Assert.True(row.CanToggle, "An excluded row must stay toggleable, or the operator cannot undo the exclusion.");
+        Assert.False(viewModel.CanApply);
+
+        row.IsIncluded = true;
+
+        Assert.Equal(1, viewModel.OperationCount);
+        Assert.Equal("Rename", row.Action);
+        Assert.Equal("124-0001 Bracket.ipt", row.ProposedFileName);
+        Assert.Equal(string.Empty, row.Reasons);
+        Assert.True(viewModel.CanApply);
+    }
+
+    /// <summary>
+    /// A blocked row is in neither Operations nor VaultInstructions, so its Action is None - but unticking
+    /// it is exactly what clears its blocker and lets the unaffected rows run. A checkbox disabled on
+    /// "Action is None" took that away and left the operator with a plan they could not unblock from the
+    /// window at all (review finding P1).
+    /// </summary>
+    [Fact]
+    public void ABlockedRowStaysToggleableAndExcludingItClearsTheBlockerAndEnablesApply()
+    {
+        FakeInventorNamingGateway gateway = new();
+        FakeNamingFileSystem fileSystem = new();
+        FileNamingWorkflow workflow = new(gateway, fileSystem, new FakeClock());
+
+        string rootPath = Path.Combine(ProjectRoot, "124-A001 GRM (main assembly).iam");
+        string blockedPartPath = Path.Combine(ProjectRoot, "Bracket.ipt");
+        string cleanPartPath = Path.Combine(ProjectRoot, "Widget.ipt");
+        string externalParentPath = Path.Combine(ProjectRoot, "OtherAssembly.iam");
+
+        gateway.Snapshot = new ActiveAssemblySnapshot(
+            rootPath,
+            false,
+            false,
+            [
+                Doc(rootPath, DocumentKind.Assembly, isRoot: true),
+                Doc(blockedPartPath, DocumentKind.Part, parents: [rootPath], externalParents: [externalParentPath]),
+                Doc(cleanPartPath, DocumentKind.Part, parents: [rootPath]),
+            ]);
+        fileSystem.SetScope(ProjectRoot, [rootPath, blockedPartPath, cleanPartPath]);
+
+        NamingAnalysis analysis = workflow.Analyze(null);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        NamingRowViewModel blockedRow = Assert.Single(viewModel.Rows, r => r.CurrentFileName == "Bracket.ipt");
+
+        Assert.Equal("None", blockedRow.Action);
+        Assert.True(blockedRow.HasBlocker);
+        Assert.True(
+            blockedRow.CanToggle,
+            "A row the plan blocked must stay toggleable: excluding it is the only way to clear its blocker.");
+        Assert.NotEmpty(viewModel.Blockers);
+        Assert.False(viewModel.CanApply);
+
+        blockedRow.IsIncluded = false;
+
+        Assert.Empty(viewModel.Blockers);
+        Assert.False(blockedRow.HasBlocker);
+        Assert.True(blockedRow.CanToggle, "An excluded row must stay toggleable so the operator can undo it.");
+        Assert.Equal(1, viewModel.OperationCount);
+        Assert.True(viewModel.CanApply);
+
+        blockedRow.IsIncluded = true;
+
+        Assert.NotEmpty(viewModel.Blockers);
+        Assert.True(blockedRow.HasBlocker);
+        Assert.True(blockedRow.CanToggle);
+        Assert.False(viewModel.CanApply);
+    }
+
+    /// <summary>
+    /// A canonical row has nothing to include or exclude, so its checkbox must be disabled rather than
+    /// offering the operator a toggle that changes nothing.
+    /// </summary>
+    [Fact]
+    public void RowsWithNoActionCannotBeToggled()
+    {
+        (FileNamingWorkflow workflow, _, _, NamingAnalysis analysis) = BuildFixture(includeVaultManagedPart: false);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+
+        NamingRowViewModel rootRow =
+            Assert.Single(viewModel.Rows, r => r.CurrentFileName == "124-A001 GRM (main assembly).iam");
+
+        Assert.Equal("None", rootRow.Action);
+        Assert.True(rootRow.IsIncluded);
+        Assert.False(rootRow.HasBlocker);
+        Assert.False(rootRow.CanToggle);
+    }
+
+    [Fact]
+    public void ExcludingAVaultManagedRowDropsItFromTheExportedVaultPlan()
+    {
+        (FileNamingWorkflow workflow, _, _, NamingAnalysis analysis) = BuildFixture(includeVaultManagedPart: true);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        NamingRowViewModel row = Assert.Single(viewModel.Rows, r => r.CurrentFileName == "Widget.ipt");
+
+        Assert.Equal(1, viewModel.VaultInstructionCount);
+        Assert.Contains("Widget.ipt ->", viewModel.BuildVaultPlanText(), StringComparison.Ordinal);
+
+        row.IsIncluded = false;
+
+        Assert.Equal(0, viewModel.VaultInstructionCount);
+        Assert.False(viewModel.HasVaultInstructions);
+        Assert.DoesNotContain("Widget.ipt ->", viewModel.BuildVaultPlanText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectNoRowsExcludesEveryActionableRowAndSelectAllRowsRestoresThem()
+    {
+        (FileNamingWorkflow workflow, _, _, NamingAnalysis analysis) = BuildFixture(includeVaultManagedPart: true);
+        FileNamingViewModel viewModel = new(workflow, analysis, applyMode: true);
+        NamingRowViewModel rootRow =
+            Assert.Single(viewModel.Rows, r => r.CurrentFileName == "124-A001 GRM (main assembly).iam");
+
+        viewModel.SelectNoRows();
+
+        Assert.Equal(0, viewModel.OperationCount);
+        Assert.Equal(0, viewModel.VaultInstructionCount);
+        Assert.True(rootRow.IsIncluded, "A row that cannot be toggled must not be excluded by Select none.");
+
+        viewModel.SelectAllRows();
+
+        Assert.Equal(1, viewModel.OperationCount);
+        Assert.Equal(1, viewModel.VaultInstructionCount);
+        Assert.All(viewModel.Rows, row => Assert.True(row.IsIncluded));
+    }
+
     [Fact]
     public void BuildVaultPlanTextListsCompanionDrawingsIndentedUnderTheirInstruction()
     {

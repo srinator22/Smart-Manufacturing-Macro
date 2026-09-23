@@ -4,7 +4,9 @@
 // Inputs: Inventor activation lifecycle and retained button OnExecute events.
 // Outputs: Two File Naming ribbon commands delegating to FileNamingCommand.
 // Dependencies: Inventor interop, Infrastructure/InventorAdapter/Application/UI, and the shared WmpRibbon tab.
-// Assumptions: Inventor owns activation and callback threading; firstTime controls UI creation.
+// Assumptions: Inventor owns activation and callback threading. The tab, panel and buttons are ensured on
+//   every Activate, not only when FirstTime is true, so a ribbon rebuild or another add-in's uninstall cannot
+//   strand this panel; FirstTime is therefore unused.
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
 #if INVENTOR_INTEROP
@@ -88,11 +90,15 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         onApplyExecuteHandler = OnApplyNamingExecute;
         applyButtonDefinition.OnExecute += onApplyExecuteHandler;
 
-        if (FirstTime)
+        RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+        RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "File Naming", PanelInternalName, ClientId);
+        if (!WmpRibbonTab.ContainsControl(panel, AnalyzeButtonInternalName))
         {
-            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
-            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "File Naming", PanelInternalName, ClientId);
             panel.CommandControls.AddButton(analyzeButtonDefinition, true, true);
+        }
+
+        if (!WmpRibbonTab.ContainsControl(panel, ApplyButtonInternalName))
+        {
             panel.CommandControls.AddButton(applyButtonDefinition, true, true);
         }
     }

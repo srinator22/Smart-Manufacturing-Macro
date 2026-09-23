@@ -4,14 +4,16 @@
 # every InventorAdapter source, the workflow Execute path, and the harness itself. Nothing but a
 # live Inventor run can produce it, so a mismatch means live behaviour is unclaimed for the
 # current sources. The hash rule here and in Program.cs.ComputeSourceHash must stay identical.
-# Usage: bash projects/file-naming-manager/scripts/check-live-evidence.sh
+# Usage: bash projects/file-naming-manager/scripts/check-live-evidence.sh [stamp-path]
+# stamp-path defaults to the project's committed LIVE_EVIDENCE.json; an explicit path is used
+# for testing failure modes without disturbing the real stamp.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="projects/file-naming-manager"
-STAMP="$PROJECT/tests/live-evidence/LIVE_EVIDENCE.json"
+STAMP="${1:-$PROJECT/tests/live-evidence/LIVE_EVIDENCE.json}"
 REFRESH="run: bash projects/file-naming-manager/scripts/run-live-smoke.sh on a machine with Inventor 2027"
 
 fail() { echo "$*" >&2; exit 1; }
@@ -26,6 +28,28 @@ field() {
 }
 
 [[ -f "$STAMP" ]] || fail "LIVE EVIDENCE MISSING: $STAMP does not exist. $REFRESH"
+
+# field() below extracts values with a regex, not a JSON parser: a truncated document (a
+# stray closing brace missing) or a value wrapped in a top-level array still contains the
+# right substrings and would otherwise be accepted. PowerShell 7 (pwsh) is already required
+# by this gate, so ConvertFrom-Json performs a real syntax check - and -NoEnumerate keeps a
+# single-element array from being silently unwrapped into what looks like a bare object -
+# before any field extracted below is trusted.
+# Named before the parse so a machine without PowerShell 7 is told what to install instead of
+# being told its stamp is corrupt.
+command -v pwsh >/dev/null 2>&1 \
+  || fail "LIVE EVIDENCE CHECK NEEDS PWSH: PowerShell 7 (pwsh) is not on PATH; install it to validate $STAMP."
+STAMP_PATH="$STAMP" pwsh -NoProfile -Command '
+  try {
+    $raw = Get-Content -Raw -LiteralPath $env:STAMP_PATH -ErrorAction Stop
+    $parsed = ConvertFrom-Json -InputObject $raw -NoEnumerate -ErrorAction Stop
+    if ($parsed -is [System.Array]) { exit 1 }
+    exit 0
+  } catch {
+    exit 1
+  }
+' >/dev/null 2>&1 \
+  || fail "LIVE EVIDENCE MALFORMED: $STAMP is not valid JSON. $REFRESH"
 
 result="$(field result)"
 [[ -n "$result" ]] || fail "LIVE EVIDENCE MALFORMED: $STAMP has no result field. $REFRESH"

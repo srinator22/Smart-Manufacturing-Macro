@@ -72,9 +72,11 @@ This is not cross-machine mutual exclusion and does not claim to be. It closes t
 
 The ribbon callback runs on Inventor's owning STA thread. The command opens one modal window and returns; the window's own work is asynchronous but stays on the dispatcher thread. The single `HttpClient` is created on activation and disposed on deactivation, so a repeated check does not exhaust sockets. Inventor interop types exist only in `AddIn`.
 
+`Activate` re-ensures the shared `WMP Custom Tools` tab and this add-in's own `WMP Tools` panel (`WmpRibbonTab.EnsureTab` / `EnsurePanel`) on every call, not only when `FirstTime` is true. Inventor rebuilds the ribbon and can drop a stranded panel - a sibling add-in uninstalled, or a user ribbon reset - without passing `FirstTime` again on the rebuild. `EnsureTab`/`EnsurePanel` are idempotent, and the "Check for updates" button is added only when `WmpRibbonTab.ContainsControl` reports the panel does not already carry it, so a re-ensured panel never gets a duplicate button. This re-ensure-on-every-activation and rebuild-recovery behavior is live-unverified.
+
 ## Verification boundaries
 
 - Core, Application and Infrastructure: deterministic unit tests with fake ports and, for the adapters, real temporary folders, a stub `HttpMessageHandler`, and one process that actually starts; plus mutation tests with enforced thresholds (`scripts/mutation.sh` records the measured scores and the residual equivalent mutants).
 - UI: a render test that shows the window on an STA thread and asserts realized `DataGridRow` containers, the rendered plugin and maturity text, and zero WPF binding errors, because a view-model-only suite cannot see XAML.
-- AddIn: compiles against the installed interop. Its live behaviour - the ribbon button appearing on the shared tab, and an apply that really replaces the installed files - is not claimed by any automated test here.
+- AddIn: compiles against the installed interop. Its live behaviour - the ribbon button appearing on the shared tab, panel and button recovery across an Inventor ribbon rebuild, and an apply that really replaces the installed files - is not claimed by any automated test here.
 - Project boundaries, the ClientId, the activation manifest version and the plugin catalog entry: architecture tests.

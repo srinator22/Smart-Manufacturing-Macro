@@ -63,7 +63,19 @@ public sealed record NamingAnalysis(
 public sealed record RenameOptions(
     bool RenameUnnumbered = true,
     bool NormalizeMalformed = false,
-    bool SetPartNumberProperty = true);
+    bool SetPartNumberProperty = true)
+{
+    /// <summary>
+    /// Full paths the operator has taken out of the plan row by row. Plan skips them before it builds a
+    /// proposal, exactly like the three option gates above, so an excluded row consumes no number and
+    /// raises no blocker. Only part and assembly rows are reachable: a drawing or presentation row never
+    /// carries an action of its own and follows its model, so its path here has no effect. It is an init-only member rather than a fourth positional parameter because a
+    /// positional default cannot be an empty collection. Comparison is case-insensitive in the workflow.
+    /// Callers pass a snapshot, never a live collection: a plan that aliased the caller's set would
+    /// silently change meaning the next time the operator ticked a box.
+    /// </summary>
+    public IReadOnlyCollection<string> ExcludedPaths { get; init; } = [];
+}
 
 public sealed record RenameOperation(
     string CurrentFullPath,
@@ -92,6 +104,20 @@ public sealed record RenamePlan(
     IReadOnlyList<VaultRenameInstruction> VaultInstructions,
     IReadOnlyList<string> ParentSaveOrder)
 {
+    /// <summary>
+    /// Full paths of the rows this plan raised a blocker against by identity and then left out of both
+    /// Operations and VaultInstructions - an unhandled external parent, or a companion drawing the tool
+    /// must not rename. Blockers itself is operator-facing prose with no row attribution, so without this
+    /// a caller cannot tell which row to offer as the way out: putting such a path in
+    /// <see cref="RenameOptions.ExcludedPaths"/> is exactly what clears its blocker and lets the
+    /// unaffected rows run. The exhausted-series blocker is deliberately NOT listed here: it belongs to
+    /// the project's number series rather than to one row, and excluding a single requester need not
+    /// clear it. Init-only rather than a sixth positional parameter because a positional default cannot
+    /// be an empty collection. Comparison is the caller's; the workflow fills it with the row's own
+    /// FullPath verbatim.
+    /// </summary>
+    public IReadOnlyCollection<string> BlockedPaths { get; init; } = [];
+
     public bool CanExecute => Blockers.Count == 0;
 }
 

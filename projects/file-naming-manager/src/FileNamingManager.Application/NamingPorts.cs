@@ -59,9 +59,10 @@ public interface IInventorNamingGateway
 public interface INamingFileSystem
 {
     /// <summary>
-    /// Returns full paths of .ipt/.iam/.idw/.dwg/.ipn files recursively under the project root,
-    /// excluding OldVersions, _V, 3rd Party Hardware, Content Center Files, and _renamed-originals
-    /// folders at any depth.
+    /// Returns full paths of .ipt/.iam/.idw/.dwg/.ipn files recursively under the project root, excluding
+    /// every folder named in <see cref="Core.NamingScopeRules.ExcludedFolderNames"/> at any depth. The
+    /// list is not repeated here: the implementation and FileNamingWorkflow's per-row scope rule must
+    /// agree on it, so it lives in one place.
     /// </summary>
     IReadOnlyList<string> EnumerateScope(string projectRoot);
 

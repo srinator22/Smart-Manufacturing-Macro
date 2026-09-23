@@ -35,6 +35,14 @@ public class NumberAllocatorTests
             []);
 
     [Fact]
+    public void NullScopeIsRefusedByName()
+    {
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
+            () => new NumberAllocator(null!, Project124));
+        Assert.Equal("scope", exception.ParamName);
+    }
+
+    [Fact]
     public void GapsAndNextNumberReportRealP124GapAndNext()
     {
         List<ParsedFileName> scope = [];

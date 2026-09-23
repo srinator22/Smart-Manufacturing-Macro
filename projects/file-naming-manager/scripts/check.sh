@@ -10,4 +10,6 @@ command -v pwsh >/dev/null 2>&1 \
 
 pwsh -NoProfile -File projects/file-naming-manager/scripts/test-packaging.ps1
 
+bash projects/file-naming-manager/scripts/test-check-live-evidence.sh
+
 bash projects/file-naming-manager/scripts/check-live-evidence.sh

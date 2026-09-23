@@ -81,7 +81,25 @@ prints `UNCLAIMED: Autodesk.Inventor.Interop not installed` with exit code 2.
    prefilled from the root and that the two new files show state Unnumbered and
    action Rename, while numbered files show Canonical and no action.
 3. Confirm the report lists every real finding present in the folder.
-4. `Apply Naming`. Confirm the two files are renamed with the next two part
+4. Untick the Include box on `bracket left.ipt`. Confirm its row turns to
+   action None with the reason `Excluded by the operator.`, that the Apply
+   plan now holds one operation instead of two, and that `bracket right.ipt`
+   moves up to the number `bracket left.ipt` had been given: an excluded row
+   must consume no number. Tick the box again and confirm both rows return to
+   Rename with their original numbers.
+5. Confirm the Include box is disabled on a row whose action is None, for
+   example an already-canonical numbered part. Select none, then confirm the
+   plan is empty and those disabled rows are still ticked. Select all, then
+   confirm the two rows from step 2 are proposed again. Set up the external
+   reference of section 3 step 6, then confirm that the blocked row keeps its
+   Include box enabled even though its action reads None, and that unticking
+   exactly that row clears the blocker while the other rows keep their
+   operations and Apply becomes available.
+6. With at least one Vault-managed file in the assembly, untick its Include
+   box and select `Export Vault plan`. Confirm the exported file carries no
+   instruction for that file, and that ticking it again brings the
+   instruction back.
+7. `Apply Naming`. Confirm the two files are renamed with the next two part
    numbers, the assembly still opens with no missing references, the originals
    are under `_renamed-originals\<timestamp>\Parts\`, and `manifest.json` lists
    both moves. Confirm Part Number iProperty equals the number token.

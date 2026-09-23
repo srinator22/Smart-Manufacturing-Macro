@@ -1,6 +1,7 @@
-// Purpose: Host FileNamingViewModel and wire the two side-effecting buttons the XAML cannot bind to.
+// Purpose: Host FileNamingViewModel and wire the buttons the XAML cannot bind to.
 // Inputs: A constructed FileNamingViewModel.
-// Outputs: Apply() invocation and a written Vault rename plan text file next to the root assembly.
+// Outputs: Apply() and the include-column Select all / Select none invocations, and a written Vault
+//   rename plan text file next to the root assembly.
 // Dependencies: FileNamingManager.UI.FileNamingViewModel only.
 // Assumptions: Writing the plan file is this code-behind's responsibility, not the view model's, per
 //   .work/TASK.md's UI acceptance criterion; the view model only builds the text. Refuses to overwrite an
@@ -25,6 +26,10 @@ public partial class FileNamingWindow : Window
     private FileNamingViewModel ViewModel => (FileNamingViewModel)DataContext;
 
     private void Apply_Click(object sender, RoutedEventArgs e) => ViewModel.Apply();
+
+    private void SelectAll_Click(object sender, RoutedEventArgs e) => ViewModel.SelectAllRows();
+
+    private void SelectNone_Click(object sender, RoutedEventArgs e) => ViewModel.SelectNoRows();
 
     private void ExportVaultPlan_Click(object sender, RoutedEventArgs e)
     {

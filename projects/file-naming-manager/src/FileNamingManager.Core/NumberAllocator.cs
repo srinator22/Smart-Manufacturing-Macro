@@ -37,10 +37,17 @@ public sealed class NumberAllocator
 
         foreach (ParsedFileName parsed in scope)
         {
-            if (parsed.Token is not NamingToken token)
+            // Assign the token on its own statement rather than through a pattern variable. A pattern
+            // variable is only definitely assigned via the branch that introduces it, so mutating that
+            // branch produces code that does not compile (CS0165); the mutation runner then falls back to
+            // its safe mode for the whole project and this file silently gets no mutation coverage.
+            // (A comment line must not begin with the runner's own name - it reads those as directives.)
+            if (parsed.Token is null)
             {
                 continue;
             }
+
+            NamingToken token = parsed.Token.Value;
 
             if (token.Project.Value != project.Value)
             {

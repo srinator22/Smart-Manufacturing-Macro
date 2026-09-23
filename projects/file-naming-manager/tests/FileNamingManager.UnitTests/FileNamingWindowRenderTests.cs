@@ -4,8 +4,8 @@
 // Inputs: A FileNamingViewModel built over a fixture with a root, an unnumbered part, and a
 //   Vault-managed part, in Apply mode.
 // Outputs: A hard failure (thrown exception, collected binding-error trace, or a visual tree missing the
-//   expected DataGridRow containers, project number TextBox, or TextBlock text) if the template did not
-//   actually render the report.
+//   expected DataGridRow containers, include-column CheckBox containers, Select all / Select none buttons,
+//   project number TextBox, or TextBlock text) if the template did not actually render the report.
 // Dependencies: FileNamingManager.UI window/view-model, WPF's own data-binding trace source, and
 //   System.Windows.Media.VisualTreeHelper.
 // Assumptions: Runs on a dedicated STA thread with no live System.Windows.Application; nothing in the gate
@@ -64,8 +64,10 @@ public sealed class FileNamingWindowRenderTests
         List<string> bindingErrors = [];
         BindingErrorListener listener = new(bindingErrors);
         int dataGridRowCount = -1;
+        int includeCheckBoxCount = -1;
         bool projectNumberTextBoxFound = false;
         List<string> renderedTexts = [];
+        List<string> buttonContents = [];
 
         Thread staThread = new(() =>
         {
@@ -89,6 +91,15 @@ public sealed class FileNamingWindowRenderTests
                     dataGridRowCount = visualDescendants.OfType<DataGridRow>().Count();
                     projectNumberTextBoxFound = visualDescendants.OfType<TextBox>().Any();
                     renderedTexts = [.. visualDescendants.OfType<TextBlock>().Select(textBlock => textBlock.Text)];
+
+                    // Only the include column's checkboxes carry a row view model as their DataContext;
+                    // the option checkboxes above the grid bind against FileNamingViewModel itself.
+                    includeCheckBoxCount = visualDescendants
+                        .OfType<CheckBox>()
+                        .Count(checkBox => checkBox.DataContext is NamingRowViewModel);
+                    buttonContents = [.. visualDescendants
+                        .OfType<Button>()
+                        .Select(button => button.Content as string ?? string.Empty)];
 
                     window.Close();
                 }
@@ -120,6 +131,13 @@ public sealed class FileNamingWindowRenderTests
             $"Expected at least {viewModel.Rows.Count} realized DataGridRow containers (one per report row), " +
             $"but only {dataGridRowCount} were found.");
         Assert.True(projectNumberTextBoxFound, "No project number TextBox was found in the rendered visual tree.");
+
+        Assert.True(
+            includeCheckBoxCount >= viewModel.Rows.Count,
+            $"Expected at least {viewModel.Rows.Count} realized include CheckBox containers (one per report row), " +
+            $"but only {includeCheckBoxCount} were found.");
+        Assert.Contains("Select all", buttonContents);
+        Assert.Contains("Select none", buttonContents);
 
         NamingRowViewModel unnumberedRow = Assert.Single(viewModel.Rows, row => row.CurrentFileName == "Bracket.ipt");
         Assert.NotEmpty(unnumberedRow.ProposedFileName);

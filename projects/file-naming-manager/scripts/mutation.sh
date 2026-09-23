@@ -7,9 +7,9 @@
 # 5, floor 0`. Re-baseline deliberately (do not just widen the gap) when a
 # genuine improvement raises the measured score.
 #
-#   Core:           measured 92.68% on 2026-09-23 -> 92.68-5=87.68 -> --break-at 85
-#   Application:    measured 94.32% on 2026-09-23 -> 94.32-5=89.32 -> --break-at 85
-#   Infrastructure: measured 97.87% on 2026-09-23 -> 97.87-5=92.87 -> --break-at 90
+#   Core:           measured 93.31% on 2026-09-23 -> 93.31-5=88.31 -> --break-at 85
+#   Application:    measured 94.85% on 2026-09-23 -> 94.85-5=89.85 -> --break-at 85
+#   Infrastructure: measured 97.67% on 2026-09-23 -> 97.67-5=92.67 -> --break-at 90
 #
 # UI (FileNamingManager.UI.csproj), InventorAdapter
 # (FileNamingManager.InventorAdapter.csproj), and AddIn
@@ -66,6 +66,13 @@ for i in "${!project_names[@]}"; do
   # between versions; the score line is the thing this gate actually depends on.
   if ! grep -Eq 'The final mutation score is' "$result_file"; then
     echo "MUTATION FAILED: project $name did not report a mutation score" >&2
+    exit 1
+  fi
+
+  # A Safe Mode run rolls back the mutants that failed to compile and still prints a score, so the
+  # score alone cannot show that every file was measured. NumberAllocator lost its coverage that way once.
+  if grep -Eqi 'safe mode' "$result_file"; then
+    echo "MUTATION FAILED: project $name ran in Stryker Safe Mode; some mutants were rolled back unmeasured" >&2
     exit 1
   fi
 done

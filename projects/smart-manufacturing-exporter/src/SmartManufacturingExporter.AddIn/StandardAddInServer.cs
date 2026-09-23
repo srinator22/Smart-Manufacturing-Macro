@@ -3,7 +3,9 @@
 // Inputs: Inventor activation lifecycle and retained button OnExecute events.
 // Outputs: One Smart Export ribbon command delegating to SmartExportCommand.
 // Dependencies: Inventor interop, Phase 1 adapters, workflow, WPF host, and the shared WmpRibbon tab.
-// Assumptions: Inventor owns activation and callback threading; firstTime controls UI creation.
+// Assumptions: Inventor owns activation and callback threading. The tab, panel and buttons are ensured on
+//   every Activate, not only when FirstTime is true, so a ribbon rebuild or another add-in's uninstall cannot
+//   strand this panel; FirstTime is therefore unused.
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
 #if INVENTOR_INTEROP
@@ -70,10 +72,10 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         onExecuteHandler = OnSmartExportExecute;
         buttonDefinition.OnExecute += onExecuteHandler;
 
-        if (FirstTime)
+        RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+        RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "Smart Export", PanelInternalName, ClientId);
+        if (!WmpRibbonTab.ContainsControl(panel, ButtonInternalName))
         {
-            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
-            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "Smart Export", PanelInternalName, ClientId);
             panel.CommandControls.AddButton(buttonDefinition, true, true);
         }
     }
