@@ -5,6 +5,9 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 
 ## [Unreleased]
 
+### Added
+- Per-row include and exclude, one scope rule, tab re-ensured on every Activate
+
 ### Changed
 - Archive release-and-updater task
 ## [0.6.0] - 2026-09-22
