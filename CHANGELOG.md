@@ -12,11 +12,14 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Archive release-and-updater task
 - Record gate 2 and the review PASS for the follow-ups
 - Record the delta review and gates 3 and 4 for the follow-ups
+- Archive file-naming-followups task
+- State the escaped and human-reported defect routes in both archived retros
 
 ### Fixed
 - Close the review findings on the follow-ups
 - Keep blocked rows selectable, validate stamp JSON, match only an explicit direct-to-main choice
 - Name a missing pwsh in the live evidence checker
+- Keep archived retros to durable memory and the backlog to remaining work
 ## [0.6.0] - 2026-09-22
 
 ### Added

@@ -51,11 +51,7 @@ Round 2 (2026-09-22T23:05Z, same reviewer): PASS - all seven findings verified f
 
 ## Retro
 
-Defects by discovery route (docs/procedures/retro.md step 1):
-
-- Route (a), caught pre-merge by checks and review: reviewer round 1 found the success-path `exit 0` closing the console under `irm | iex`, the untruthful part-way message, the two-plugin pinning in test-release.sh, the missing catalog uniqueness check, a stranded newer-release plugin on rollback and a stale mutation figure; GitHub review found catalog path traversal, dropped plugins left installed, concurrent apply launches and the x86 runtime probe. Every one received a failing-first test before its fix. The system worked; nothing recorded per step 2.
-- Route (d), self-noticed: the advisor's initial part-way message asserted an archive that might not exist (corrected by the reviewer's finding before merge) and the addinTemplate containment gap reported by worker C1 (fixed in the same change). Nothing recorded.
-- Route (b) escaped past merge: none. Route (c) reported by the human: none yet; the first real install by a WMP user is the next signal.
+Defects escaped past merge (route b): none. Defects reported by the human (route c): none yet; the first real install by a WMP user is the next signal.
 
 Confirmed-good call worth a pending lesson (step 4, not yet human-validated, so not proposed): running an independent adversarial review before the first push caught a blocker (console closing on success) that 16 green test cases and the full gate could not see, because no test executed the success path under Invoke-Expression. The gate now has that test.
 
