@@ -6,4 +6,5 @@ Do not move project-specific code here in anticipation of reuse. A shared compon
 
 ## Components
 
-- [WmpRibbon](WmpRibbon/README.md) - the shared "WMP Custom Tools" Inventor ribbon tab. Consumers: Smart Manufacturing Exporter, File Naming Manager.
+- [WmpRibbon](WmpRibbon/README.md) - the shared "WMP Custom Tools" Inventor ribbon tab and the theme- and scale-aware ribbon icon loader. Consumers: Smart Manufacturing Exporter, File Naming Manager, WMP Tools Manager. Tests: `WmpRibbon.UnitTests`.
+- [WmpIconRenderer](WmpIconRenderer/README.md) - build tooling that renders every project's ribbon icon masters to PNGs and verifies them in `scripts/check.sh`. Consumers: every project with a ribbon command. Authoring rules: [docs/rules/ribbon-icons.md](../docs/rules/ribbon-icons.md).

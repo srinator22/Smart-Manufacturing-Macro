@@ -57,6 +57,7 @@ These rules govern process. Project truth lives in the Project decisions section
 - Experiments, models, leakage, validation status -> docs/rules/scientific-integrity.md
 - Deleting or overwriting anything material -> docs/rules/destructive-actions.md
 - CI permissions, pinning, caching, deploy gating -> docs/rules/ci-baseline.md
+- New ribbon commands, tool icons, or logos -> docs/rules/ribbon-icons.md
 
 ## Project decisions
 
