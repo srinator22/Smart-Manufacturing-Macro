@@ -51,6 +51,8 @@ Round 2 (2026-09-22T23:05Z, same reviewer): PASS - all seven findings verified f
 
 ## Retro
 
+Defects escaped past merge (route b): none. Defects reported by the human (route c): none yet; the first real install by a WMP user is the next signal.
+
 Confirmed-good call worth a pending lesson (step 4, not yet human-validated, so not proposed): running an independent adversarial review before the first push caught a blocker (console closing on success) that 16 green test cases and the full gate could not see, because no test executed the success path under Invoke-Expression. The gate now has that test.
 
 Delivery evidence: local scripts/check.sh check: OK three times (last: tests 342 + 12, 55 + 6, 255 + 9; packaging OK x3; live-evidence OK; build-release-test OK; release-test OK 20 cases; no leaks; mutation 92.57 / 92.47 / 79.31 %); PR #15 CI success for 5fd2ebad076d0cd74ed1d15c6c58a487ea915108; merged as 8e6e4abb3e667b087240b6f51750f05cf6f1a65d; main CI success for that SHA; release run https://github.com/srinator22/Smart-Manufacturing-Macro/actions/runs/35798325491 (success) published https://github.com/srinator22/Smart-Manufacturing-Macro/releases/tag/v0.6.0 (assets: WmpInventorTools-0.6.0.zip 405769 B, SHA256SUMS.txt, Install-WmpInventorTools.ps1; zip sha256 2aba092aac87e668d02e78b7d465a2ae2d3af6393f9cbf837146282d7cfd5765); one-liner verified 2026-09-22T23:42Z under Windows PowerShell 5.1 into isolated roots: installed.json version 0.6.0 with 3 plugins all beta, three manifests written with absolute assembly paths, installer persisted, console stayed open (AFTER printed).
