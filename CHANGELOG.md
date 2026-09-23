@@ -18,6 +18,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Close the review findings on the follow-ups
 - Keep blocked rows selectable, validate stamp JSON, match only an explicit direct-to-main choice
 - Name a missing pwsh in the live evidence checker
+- Keep archived retros to durable memory and the backlog to remaining work
 ## [0.6.0] - 2026-09-22
 
 ### Added
