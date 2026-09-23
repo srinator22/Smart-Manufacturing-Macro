@@ -14,6 +14,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 
 ### Fixed
 - Close the review findings on the follow-ups
+- Keep blocked rows selectable, validate stamp JSON, match only an explicit direct-to-main choice
 ## [0.6.0] - 2026-09-22
 
 ### Added
