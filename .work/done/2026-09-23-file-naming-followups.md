@@ -51,12 +51,6 @@ Delta (2026-09-23T00:55Z, same reviewer, commit b24f2e1): PASS - BlockedPaths in
 
 ## Retro
 
-Defects by discovery route (docs/procedures/retro.md step 1):
-
-- Route (a), caught pre-merge by checks and review: the reviewer's round 1 found four BACKLOG rows left open, three stale module headers, a second copy of the archive folder literal, two documentation overstatements and an unmechanized Safe Mode observation; the GitHub review found that blocked rows could not be unticked to clear their own blocker, that the malformed-stamp test never exercised invalid JSON, and that a negated direct-to-main sentence still matched. Every item was fixed failing-first; the Safe Mode gap and the JSON gap became gate checks. Nothing recorded per step 2.
-- Route (d), self-noticed: the render harness under .work/jobs had drifted from the ports and was repaired by the worker; W1 reported that DataGridTemplateColumn binding errors do not reach the render test's trace listener (recorded in BACKLOG, not a lesson yet).
-- Route (b) escaped past merge: none. Route (c) reported by the human: none.
-
 No new lesson proposed: each correction is now expressed as a check (test-new-task.sh, test-check-live-evidence.sh, the Safe Mode assertion, RenamedOriginalsArchiveFolderIsExcludedFromTheScope) or derivable from the repo.
 
 Delivery evidence: local scripts/check.sh check: OK four times on this branch (last: tests 287 + 9, 55 + 6, 342 + 12; packaging OK x3; live-evidence OK after three hidden-Inventor smoke runs of 52 assertions each; build-release-test OK; release-test OK; no leaks; mutation naming 93.31 / 94.89 / 97.67 %, exporter 80.00 / 85.11 %, tools manager 92.57 / 92.47 / 79.31 %); PR #17 CI success for ffff48dc78f9ee86bd5cd74f7e7333795e8a18bf; merged as 54b8b9080427a930c749dc03994c6421db3ca2e9; main CI success for that SHA.
