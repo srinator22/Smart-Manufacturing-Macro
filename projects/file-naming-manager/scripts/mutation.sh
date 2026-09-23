@@ -7,8 +7,8 @@
 # 5, floor 0`. Re-baseline deliberately (do not just widen the gap) when a
 # genuine improvement raises the measured score.
 #
-#   Core:           measured 93.33% on 2026-09-23 -> 93.33-5=88.33 -> --break-at 85
-#   Application:    measured 94.86% on 2026-09-23 -> 94.86-5=89.86 -> --break-at 85
+#   Core:           measured 93.31% on 2026-09-23 -> 93.31-5=88.31 -> --break-at 85
+#   Application:    measured 94.85% on 2026-09-23 -> 94.85-5=89.85 -> --break-at 85
 #   Infrastructure: measured 97.67% on 2026-09-23 -> 97.67-5=92.67 -> --break-at 90
 #
 # UI (FileNamingManager.UI.csproj), InventorAdapter

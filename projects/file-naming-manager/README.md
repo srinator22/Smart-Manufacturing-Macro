@@ -174,7 +174,7 @@ From Git Bash:
 ./scripts/check.sh
 ```
 
-The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. The mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 90%, against measured scores of 93.33% / 94.86% / 97.67% on 2026-09-23.
+The gauntlet restores only from committed lockfiles, checks formatting and analyzers, compiles with warnings as errors, enforces product and cross-project architecture tests, runs unit tests, scans Git history and the working tree for secrets, builds Release output, runs the product-owned mutation suite when production logic changes, and verifies the generated changelog. The mutation suite enforces Core at 85%, Application at 85%, and Infrastructure at 90%, against measured scores of 93.31% / 94.85% / 97.67% on 2026-09-23.
 
 Individual development commands:
 
