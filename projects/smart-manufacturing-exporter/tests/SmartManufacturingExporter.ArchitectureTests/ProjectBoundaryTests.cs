@@ -153,40 +153,47 @@ public sealed class ProjectBoundaryTests
     }
 
     [Fact]
-    public void SmartExportVisualAssetsExistAndAreEmbeddedByTheirOwningHosts()
+    public void SmartExportRibbonIconVariantsExistAndAreEmbeddedByTheirOwningHosts()
     {
+        // The add-in picks a theme and scale-specific PNG at activation (WmpRibbon.RibbonIcons), so every
+        // dark and light variant must exist and be embedded under the resource name the loader builds.
         string projectRoot = FindProjectRoot();
-        string assetsRoot = Path.Combine(projectRoot, "assets");
+        string ribbonRoot = Path.Combine(projectRoot, "assets", "ribbon");
+        foreach (string icon in new[] { "smart-export" })
+        {
+            foreach (string theme in new[] { "dark", "light" })
+            {
+                foreach (int size in new[] { 16, 20, 24, 32, 40, 48, 64 })
+                {
+                    string png = Path.Combine(ribbonRoot, $"{icon}-{theme}-{size}.png");
+                    Assert.True(File.Exists(png), $"Missing rendered ribbon icon {png}; run dotnet run --project shared/WmpIconRenderer.");
+                }
+            }
+        }
 
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "smart-export-16.png")));
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "smart-export-32.png")));
-
-        XDocument uiProject = XDocument.Load(Path.Combine(
-            projectRoot,
-            "src",
-            "SmartManufacturingExporter.UI",
-            "SmartManufacturingExporter.UI.csproj"));
+        XDocument uiProject = XDocument.Load(Path.Combine(projectRoot, "src", "SmartManufacturingExporter.UI", "SmartManufacturingExporter.UI.csproj"));
         string[] uiResources = uiProject
             .Descendants("Resource")
             .Select(element => element.Attribute("Include")?.Value)
             .Where(value => value is not null)
             .Cast<string>()
             .ToArray();
-        Assert.Contains(@"..\..\assets\smart-export-32.png", uiResources);
+        Assert.Contains(@"..\..\assets\ribbon\smart-export-light-32.png", uiResources);
+        string window = File.ReadAllText(Path.Combine(projectRoot, "src", "SmartManufacturingExporter.UI", "Phase1", "SmartExportWindow.xaml"));
+        Assert.Contains("Assets/smart-export-light-32.png", window, StringComparison.Ordinal);
 
-        XDocument addInProject = XDocument.Load(Path.Combine(
-            projectRoot,
-            "src",
-            "SmartManufacturingExporter.AddIn",
-            "SmartManufacturingExporter.AddIn.csproj"));
-        string[] addInResources = addInProject
+        XDocument addInProject = XDocument.Load(Path.Combine(projectRoot, "src", "SmartManufacturingExporter.AddIn", "SmartManufacturingExporter.AddIn.csproj"));
+        XElement ribbonResources = addInProject
             .Descendants("EmbeddedResource")
-            .Select(element => element.Attribute("Include")?.Value)
-            .Where(value => value is not null)
-            .Cast<string>()
-            .ToArray();
-        Assert.Contains(@"..\..\assets\smart-export-16.png", addInResources);
-        Assert.Contains(@"..\..\assets\smart-export-32.png", addInResources);
+            .Single(element => element.Attribute("Include")?.Value == @"..\..\assets\ribbon\*.png");
+        Assert.Equal("SmartManufacturingExporter.AddIn.Ribbon.%(Filename)%(Extension)", ribbonResources.Attribute("LogicalName")?.Value);
+
+        string server = File.ReadAllText(Path.Combine(projectRoot, "src", "SmartManufacturingExporter.AddIn", "StandardAddInServer.cs"));
+        Assert.DoesNotContain("PictureDispConverter", server, StringComparison.Ordinal);
+        foreach (string icon in new[] { "smart-export" })
+        {
+            Assert.Contains($"RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, \"SmartManufacturingExporter.AddIn\", \"{icon}\")", server, StringComparison.Ordinal);
+        }
     }
 
     private static string FindProjectRoot()

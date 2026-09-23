@@ -10,12 +10,8 @@
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
 #if INVENTOR_INTEROP
-using System.Drawing;
-using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using FileNamingManager.AddIn.Commands;
-using FileNamingManager.AddIn.Interop;
 using FileNamingManager.Application;
 using FileNamingManager.Infrastructure;
 using FileNamingManager.InventorAdapter;
@@ -43,10 +39,10 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     private ButtonDefinitionSink_OnExecuteEventHandler? onAnalyzeExecuteHandler;
     private ButtonDefinitionSink_OnExecuteEventHandler? onApplyExecuteHandler;
     private FileNamingCommand? fileNamingCommand;
-    private Bitmap? standardIconBitmap;
-    private Bitmap? largeIconBitmap;
-    private object? standardIcon;
-    private object? largeIcon;
+    private object? analyzeStandardIcon;
+    private object? analyzeLargeIcon;
+    private object? applyStandardIcon;
+    private object? applyLargeIcon;
 
     public object? Automation => null;
 
@@ -61,10 +57,8 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         FileNamingWorkflow workflow = new(gateway, fileSystem, clock);
         fileNamingCommand = new(inventorApplication, workflow, gateway);
 
-        standardIconBitmap = LoadRibbonIcon("file-naming-16.png");
-        largeIconBitmap = LoadRibbonIcon("file-naming-32.png");
-        standardIcon = PictureDispConverter.ToPictureDisp(standardIconBitmap);
-        largeIcon = PictureDispConverter.ToPictureDisp(largeIconBitmap);
+        (analyzeStandardIcon, analyzeLargeIcon) = RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, "FileNamingManager.AddIn", "analyze-naming");
+        (applyStandardIcon, applyLargeIcon) = RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, "FileNamingManager.AddIn", "apply-naming");
 
         analyzeButtonDefinition = inventorApplication.CommandManager.ControlDefinitions.AddButtonDefinition(
             "Analyze Naming",
@@ -73,8 +67,8 @@ public sealed class StandardAddInServer : ApplicationAddInServer
             ClientId,
             "Analyze the active assembly's file names against the WMP numbering scheme.",
             "Analyze the active assembly's file names against the WMP numbering scheme.",
-            standardIcon,
-            largeIcon);
+            analyzeStandardIcon,
+            analyzeLargeIcon);
         onAnalyzeExecuteHandler = OnAnalyzeNamingExecute;
         analyzeButtonDefinition.OnExecute += onAnalyzeExecuteHandler;
 
@@ -85,8 +79,8 @@ public sealed class StandardAddInServer : ApplicationAddInServer
             ClientId,
             "Preview and apply WMP file numbering to unnumbered files in the active assembly.",
             "Preview and apply WMP file numbering to unnumbered files in the active assembly.",
-            standardIcon,
-            largeIcon);
+            applyStandardIcon,
+            applyLargeIcon);
         onApplyExecuteHandler = OnApplyNamingExecute;
         applyButtonDefinition.OnExecute += onApplyExecuteHandler;
 
@@ -120,12 +114,10 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         analyzeButtonDefinition = null;
         applyButtonDefinition = null;
         fileNamingCommand = null;
-        standardIcon = null;
-        largeIcon = null;
-        standardIconBitmap?.Dispose();
-        standardIconBitmap = null;
-        largeIconBitmap?.Dispose();
-        largeIconBitmap = null;
+        analyzeStandardIcon = null;
+        analyzeLargeIcon = null;
+        applyStandardIcon = null;
+        applyLargeIcon = null;
         inventorApplication = null;
     }
 
@@ -136,14 +128,5 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     private void OnAnalyzeNamingExecute(NameValueMap context) => fileNamingCommand?.Execute(FileNamingMode.Analyze);
 
     private void OnApplyNamingExecute(NameValueMap context) => fileNamingCommand?.Execute(FileNamingMode.Apply);
-
-    private static Bitmap LoadRibbonIcon(string fileName)
-    {
-        string resourceName = $"FileNamingManager.AddIn.Assets.{fileName}";
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded ribbon icon was not found: {resourceName}.");
-        using Bitmap decodedBitmap = new(stream);
-        return new Bitmap(decodedBitmap);
-    }
 }
 #endif

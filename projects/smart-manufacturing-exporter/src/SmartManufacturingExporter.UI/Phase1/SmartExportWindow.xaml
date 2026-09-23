@@ -9,7 +9,7 @@
         MinHeight="440"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Icon="/SmartManufacturingExporter.UI;component/Assets/smart-export-32.png">
+        Icon="/SmartManufacturingExporter.UI;component/Assets/smart-export-light-32.png">
     <Grid Margin="18">
         <Grid.Resources>
             <HierarchicalDataTemplate DataType="{x:Type local:SmartExportTreeNodeViewModel}"

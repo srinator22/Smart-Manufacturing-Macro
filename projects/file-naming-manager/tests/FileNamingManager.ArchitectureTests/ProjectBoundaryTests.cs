@@ -189,13 +189,23 @@ public sealed class ProjectBoundaryTests
     }
 
     [Fact]
-    public void VisualAssetsExistAndAreEmbeddedByTheirOwningHosts()
+    public void RibbonIconVariantsExistAndAreEmbeddedByTheirOwningHosts()
     {
+        // The add-in picks a theme and scale-specific PNG at activation (WmpRibbon.RibbonIcons), so every
+        // dark and light variant must exist and be embedded under the resource name the loader builds.
         string projectRoot = FindProjectRoot();
-        string assetsRoot = Path.Combine(projectRoot, "assets");
-
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "file-naming-16.png")));
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "file-naming-32.png")));
+        string ribbonRoot = Path.Combine(projectRoot, "assets", "ribbon");
+        foreach (string icon in new[] { "analyze-naming", "apply-naming" })
+        {
+            foreach (string theme in new[] { "dark", "light" })
+            {
+                foreach (int size in new[] { 16, 20, 24, 32, 40, 48, 64 })
+                {
+                    string png = Path.Combine(ribbonRoot, $"{icon}-{theme}-{size}.png");
+                    Assert.True(File.Exists(png), $"Missing rendered ribbon icon {png}; run dotnet run --project shared/WmpIconRenderer.");
+                }
+            }
+        }
 
         XDocument uiProject = XDocument.Load(Path.Combine(projectRoot, "src", "FileNamingManager.UI", "FileNamingManager.UI.csproj"));
         string[] uiResources = uiProject
@@ -204,17 +214,22 @@ public sealed class ProjectBoundaryTests
             .Where(value => value is not null)
             .Cast<string>()
             .ToArray();
-        Assert.Contains(@"..\..\assets\file-naming-32.png", uiResources);
+        Assert.Contains(@"..\..\assets\ribbon\analyze-naming-light-32.png", uiResources);
+        string window = File.ReadAllText(Path.Combine(projectRoot, "src", "FileNamingManager.UI", "FileNamingWindow.xaml"));
+        Assert.Contains("Assets/analyze-naming-light-32.png", window, StringComparison.Ordinal);
 
         XDocument addInProject = XDocument.Load(Path.Combine(projectRoot, "src", "FileNamingManager.AddIn", "FileNamingManager.AddIn.csproj"));
-        string[] addInResources = addInProject
+        XElement ribbonResources = addInProject
             .Descendants("EmbeddedResource")
-            .Select(element => element.Attribute("Include")?.Value)
-            .Where(value => value is not null)
-            .Cast<string>()
-            .ToArray();
-        Assert.Contains(@"..\..\assets\file-naming-16.png", addInResources);
-        Assert.Contains(@"..\..\assets\file-naming-32.png", addInResources);
+            .Single(element => element.Attribute("Include")?.Value == @"..\..\assets\ribbon\*.png");
+        Assert.Equal("FileNamingManager.AddIn.Ribbon.%(Filename)%(Extension)", ribbonResources.Attribute("LogicalName")?.Value);
+
+        string server = File.ReadAllText(Path.Combine(projectRoot, "src", "FileNamingManager.AddIn", "StandardAddInServer.cs"));
+        Assert.DoesNotContain("PictureDispConverter", server, StringComparison.Ordinal);
+        foreach (string icon in new[] { "analyze-naming", "apply-naming" })
+        {
+            Assert.Contains($"RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, \"FileNamingManager.AddIn\", \"{icon}\")", server, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

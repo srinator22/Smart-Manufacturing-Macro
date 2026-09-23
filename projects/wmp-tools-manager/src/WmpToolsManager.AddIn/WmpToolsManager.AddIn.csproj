@@ -26,12 +26,9 @@
 
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
-    <EmbeddedResource Include="..\..\assets\tools-manager-16.png"
-                      Link="Assets\tools-manager-16.png"
-                      LogicalName="WmpToolsManager.AddIn.Assets.tools-manager-16.png" />
-    <EmbeddedResource Include="..\..\assets\tools-manager-32.png"
-                      Link="Assets\tools-manager-32.png"
-                      LogicalName="WmpToolsManager.AddIn.Assets.tools-manager-32.png" />
+    <EmbeddedResource Include="..\..\assets\ribbon\*.png"
+                      Link="Assets\Ribbon\%(Filename)%(Extension)"
+                      LogicalName="WmpToolsManager.AddIn.Ribbon.%(Filename)%(Extension)" />
     <!-- The ribbon tooltip states this plugin's maturity. Embedding the catalog entry ties that
          statement to the binary, so a shipped DLL cannot claim a maturity that its plugin.json no
          longer declares. -->

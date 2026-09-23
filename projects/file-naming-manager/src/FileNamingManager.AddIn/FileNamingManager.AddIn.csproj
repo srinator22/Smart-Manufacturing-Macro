@@ -27,12 +27,9 @@
 
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
-    <EmbeddedResource Include="..\..\assets\file-naming-16.png"
-                      Link="Assets\file-naming-16.png"
-                      LogicalName="FileNamingManager.AddIn.Assets.file-naming-16.png" />
-    <EmbeddedResource Include="..\..\assets\file-naming-32.png"
-                      Link="Assets\file-naming-32.png"
-                      LogicalName="FileNamingManager.AddIn.Assets.file-naming-32.png" />
+    <EmbeddedResource Include="..\..\assets\ribbon\*.png"
+                      Link="Assets\Ribbon\%(Filename)%(Extension)"
+                      LogicalName="FileNamingManager.AddIn.Ribbon.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>

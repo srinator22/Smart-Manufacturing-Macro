@@ -9,12 +9,8 @@
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
 #if INVENTOR_INTEROP
-using System.Drawing;
-using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Inventor;
-using SmartManufacturingExporter.AddIn.Interop;
 using SmartManufacturingExporter.AddIn.Phase1;
 using SmartManufacturingExporter.Application.Phase1;
 using SmartManufacturingExporter.Infrastructure.Phase1;
@@ -38,8 +34,6 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     private ButtonDefinition? buttonDefinition;
     private ButtonDefinitionSink_OnExecuteEventHandler? onExecuteHandler;
     private SmartExportCommand? smartExportCommand;
-    private Bitmap? standardIconBitmap;
-    private Bitmap? largeIconBitmap;
     private object? standardIcon;
     private object? largeIcon;
 
@@ -55,10 +49,7 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         SmartExportWorkflow workflow = new(gateway, fileSystem);
         smartExportCommand = new(inventorApplication, workflow);
 
-        standardIconBitmap = LoadRibbonIcon("smart-export-16.png");
-        largeIconBitmap = LoadRibbonIcon("smart-export-32.png");
-        standardIcon = PictureDispConverter.ToPictureDisp(standardIconBitmap);
-        largeIcon = PictureDispConverter.ToPictureDisp(largeIconBitmap);
+        (standardIcon, largeIcon) = RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, "SmartManufacturingExporter.AddIn", "smart-export");
 
         buttonDefinition = inventorApplication.CommandManager.ControlDefinitions.AddButtonDefinition(
             "Smart Export",
@@ -92,10 +83,6 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         smartExportCommand = null;
         standardIcon = null;
         largeIcon = null;
-        standardIconBitmap?.Dispose();
-        standardIconBitmap = null;
-        largeIconBitmap?.Dispose();
-        largeIconBitmap = null;
         inventorApplication = null;
     }
 
@@ -104,14 +91,5 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     }
 
     private void OnSmartExportExecute(NameValueMap context) => smartExportCommand?.Execute();
-
-    private static Bitmap LoadRibbonIcon(string fileName)
-    {
-        string resourceName = $"SmartManufacturingExporter.AddIn.Assets.{fileName}";
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded ribbon icon was not found: {resourceName}.");
-        using Bitmap decodedBitmap = new(stream);
-        return new Bitmap(decodedBitmap);
-    }
 }
 #endif
