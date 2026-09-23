@@ -13,6 +13,7 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record gate 2 and the review PASS for the follow-ups
 - Record the delta review and gates 3 and 4 for the follow-ups
 - Archive file-naming-followups task
+- State the escaped and human-reported defect routes in both archived retros
 
 ### Fixed
 - Close the review findings on the follow-ups
