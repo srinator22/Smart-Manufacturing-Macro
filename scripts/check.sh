@@ -41,6 +41,7 @@ need git-cliff
 
 # Step 4: workspace registration and project contracts.
 bash ./scripts/test-project-readmes.sh
+bash ./scripts/test-new-task.sh
 bash ./scripts/check-project-readmes.sh
 
 registered_projects="$(dotnet sln InventorScripts.sln list \

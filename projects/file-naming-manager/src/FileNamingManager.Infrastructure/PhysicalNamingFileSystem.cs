@@ -1,20 +1,21 @@
 // Purpose: Provide the real, conservative file system operations FileNamingWorkflow needs.
 // Inputs: Project root, file, and originals-archive paths.
 // Outputs: Scope listings, Vault-tracker and existence checks, archived originals, and a JSON manifest.
-// Dependencies: System.IO and System.Text.Json only.
-// Assumptions: Runs on Windows; MoveToOriginals never overwrites; nothing here ever deletes a file.
-// Validation source: .work/TASK.md "Vault safety model" section; PhysicalNamingFileSystemTests temp-directory cases.
+// Dependencies: System.IO, System.Text.Json, and FileNamingManager.Core.NamingScopeRules.
+// Assumptions: Runs on Windows; MoveToOriginals never overwrites; nothing here ever deletes a file. The
+//   excluded-folder list is NamingScopeRules' alone, so enumeration and the per-row scope rule cannot drift.
+// Validation source: .work/TASK.md "Vault safety model" section; PhysicalNamingFileSystemTests temp-directory
+//   cases; ScopeAgreementTests.
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FileNamingManager.Application;
+using FileNamingManager.Core;
 
 namespace FileNamingManager.Infrastructure;
 
 public sealed class PhysicalNamingFileSystem : INamingFileSystem
 {
-    private static readonly string[] ExcludedFolderNames =
-        ["OldVersions", "_V", "3rd Party Hardware", "Content Center Files", "_renamed-originals"];
     private static readonly string[] ScopeExtensions = [".ipt", ".iam", ".idw", ".dwg", ".ipn"];
     private static readonly JsonSerializerOptions ManifestJsonOptions = new() { WriteIndented = true };
 
@@ -124,7 +125,7 @@ public sealed class PhysicalNamingFileSystem : INamingFileSystem
         foreach (string subDirectory in Directory.EnumerateDirectories(directory))
         {
             string name = Path.GetFileName(subDirectory);
-            if (ExcludedFolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            if (NamingScopeRules.IsExcludedFolderName(name))
             {
                 continue;
             }

@@ -44,7 +44,15 @@ moved by the tool, never deleted; see `VAULT_RENAME_DESIGN.md`.
 | --- | --- | --- |
 | Shared tab lookup and creation | `UserInterfaceManager.Ribbons`, `Ribbon.RibbonTabs`, `RibbonTabs.Item(object)`, `RibbonTabs.Add(string, string, string, string, bool, bool)` | Interop XML, shared through `shared/WmpRibbon` |
 | Panel and command | `RibbonPanels.Item(object)`, `RibbonPanels.Add(string, string, string, string, bool)`, `CommandControls.AddButton(ButtonDefinition, bool, bool, string, bool)`, `ControlDefinitions.AddButtonDefinition(...)` | Interop XML |
+| Duplicate-button guard | `RibbonPanel.CommandControls`, `CommandControl.InternalName` (enumerated, never indexed by a name that may not exist) | Interop XML, shared through `shared/WmpRibbon` |
 | Window ownership | `Application.MainFrameHWND` | Interop XML |
+
+The shared tab and this add-in's own panel are re-ensured on every `Activate` call, not
+only when `FirstTime` is true, because Inventor rebuilds the ribbon and can drop a
+stranded panel (a sibling add-in uninstalled, or a user ribbon reset) without passing
+`FirstTime` again. Each button is added only when `WmpRibbonTab.ContainsControl` reports
+the panel does not already carry it, so a re-ensured panel never gets a duplicate. This
+re-ensure-on-every-activation and rebuild-recovery behavior is live-unverified.
 
 ## Live smoke fixture (automation only, never the Vault workspace)
 
@@ -73,5 +81,6 @@ gates no rename decision; the workflow reads it only for display.
 
 - Behaviour of `SaveAs(..., false)` on a document referenced by a parent that is not open in the session (the tool opens parents through the active assembly, so this should not occur, but it is unverified).
 - Interaction with the Inventor Vault add-in when a checked-out parent is saved after a child rename; expected to be the ordinary new-file check-in flow.
-- Ribbon tab persistence across Inventor restarts when two add-ins share one tab.
+- Ribbon tab persistence across Inventor restarts when three add-ins share one tab.
+- Panel and button recovery across an Inventor ribbon rebuild (sibling add-in uninstall or ribbon reset).
 - Rename of a model whose companion drawing is checked in to Vault.

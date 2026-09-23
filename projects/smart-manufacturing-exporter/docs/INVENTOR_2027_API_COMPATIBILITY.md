@@ -36,6 +36,7 @@ live-host behavior.
 | Ribbon | `RibbonTabs.Item(object)` | Installed interop XML |
 | Ribbon | `RibbonPanels.Add(string, string, string, string, bool)` | Installed interop XML |
 | Ribbon | `RibbonPanels.Item(object)` | Installed interop XML |
+| Ribbon | `RibbonPanel.CommandControls`, `CommandControl.InternalName` (enumerated, never indexed by a name that may not exist) | Installed interop XML |
 | Command placement | `CommandControls.AddButton(ButtonDefinition, bool, bool, string, bool)` | Installed interop XML |
 | Translator | `TranslatorAddIn.HasSaveCopyAsOptions` | Installed interop XML |
 | Translator | `TranslatorAddIn.SaveCopyAs(object, TranslationContext, NameValueMap, DataMedium)` | Installed interop XML |
@@ -56,6 +57,7 @@ live-host behavior.
 - A source document is opened invisibly only when it is not already open and is closed with `Close(true)` only when the exporter opened it.
 - Low, Medium, and Highest map to `export_fit_tolerance` values `0.001`, `0.0001`, and `0.00001` centimeters respectively. Lower values increase spline approximation accuracy and can increase file size.
 - The Smart Export command lives on the shared `WMP Custom Tools` ribbon tab (`shared/WmpRibbon`). This add-in owns only its own `Smart Export` panel on that tab; it never creates a second tab and never deletes the shared tab.
+- `Activate` re-ensures the shared tab and this add-in's own panel on every call, not only when `FirstTime` is true, because Inventor rebuilds the ribbon and can drop a stranded panel (a sibling add-in uninstalled, or a user ribbon reset) without passing `FirstTime` again. The button is added only when `WmpRibbonTab.ContainsControl` reports the panel does not already carry it, so a re-ensured panel never gets a duplicate. This re-ensure-on-every-activation and rebuild-recovery behavior is live-unverified.
 
 ## Deferred live-host verification
 
@@ -65,6 +67,7 @@ manifests. They remain deferred until exercised in a live Inventor 2027 host.
 - Live acceptance of the Low, Medium, and Highest `export_fit_tolerance` values in Inventor 2027.
 - AP242 option mapping.
 - Interactive ribbon internal IDs and persistence behavior.
+- Panel and button recovery across an Inventor ribbon rebuild (sibling add-in uninstall or ribbon reset).
 - Source close and open behavior in a live host.
 - Recursive traversal through three live assembly levels, including unresolved and suppressed occurrences.
 - Live `.iam` STEP translation and preservation of an already-open active assembly.

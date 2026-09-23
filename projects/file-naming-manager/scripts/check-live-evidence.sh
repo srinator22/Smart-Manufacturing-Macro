@@ -4,14 +4,16 @@
 # every InventorAdapter source, the workflow Execute path, and the harness itself. Nothing but a
 # live Inventor run can produce it, so a mismatch means live behaviour is unclaimed for the
 # current sources. The hash rule here and in Program.cs.ComputeSourceHash must stay identical.
-# Usage: bash projects/file-naming-manager/scripts/check-live-evidence.sh
+# Usage: bash projects/file-naming-manager/scripts/check-live-evidence.sh [stamp-path]
+# stamp-path defaults to the project's committed LIVE_EVIDENCE.json; an explicit path is used
+# for testing failure modes without disturbing the real stamp.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="projects/file-naming-manager"
-STAMP="$PROJECT/tests/live-evidence/LIVE_EVIDENCE.json"
+STAMP="${1:-$PROJECT/tests/live-evidence/LIVE_EVIDENCE.json}"
 REFRESH="run: bash projects/file-naming-manager/scripts/run-live-smoke.sh on a machine with Inventor 2027"
 
 fail() { echo "$*" >&2; exit 1; }

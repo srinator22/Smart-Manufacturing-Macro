@@ -15,15 +15,6 @@ public sealed class FileNamingWorkflow
 {
     public const string RequiredAssemblyMessage = "File Naming Manager requires an active, saved Inventor assembly.";
 
-    /// <summary>
-    /// The folders INamingFileSystem.EnumerateScope skips at any depth. An assembly routinely references
-    /// documents from these folders and from outside the project root altogether - Content Center parts,
-    /// 3rd Party Hardware, a part owned by another project - and those files belong to someone else: the
-    /// tool must neither rename them nor relocate their originals.
-    /// </summary>
-    private static readonly string[] ScopeExcludedFolderNames =
-        ["OldVersions", "_V", "3rd Party Hardware", "Content Center Files", "_renamed-originals"];
-
     private static readonly char[] PathSeparators = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
 
     private readonly IInventorNamingGateway gateway;
@@ -92,6 +83,7 @@ public sealed class FileNamingWorkflow
         }
 
         NumberAllocator allocator = new(analysis.Scope.Select(entry => entry.Parsed), project);
+        HashSet<string> excludedPaths = new(options.ExcludedPaths, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, NamingAnalysisRow> rowsByPath = analysis.Rows.ToDictionary(row => row.FullPath, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, int> depths = ComputeDepths(analysis.Rows);
 
@@ -130,6 +122,16 @@ public sealed class FileNamingWorkflow
                 // A Content Center part, a 3rd Party Hardware part, or a part owned by another project.
                 // Silently skipped rather than blocked: its presence is normal and must not stop the
                 // rows this project does own. BuildRow carries the reason onto the row itself.
+                continue;
+            }
+
+            if (excludedPaths.Contains(row.FullPath))
+            {
+                // The operator cleared this row's include box. Skipped here, before any proposal is
+                // built, for the same reason as the option gate below: building a proposal allocates the
+                // next free number, so an excluded row that got that far would burn a number the next
+                // row then skips. An excluded row also contributes no blocker of its own - nothing about
+                // a file the plan will not touch can stop the rows it will.
                 continue;
             }
 
@@ -494,8 +496,12 @@ public sealed class FileNamingWorkflow
 
     /// <summary>
     /// True when the scope enumeration would never reach <paramref name="fullPath"/>: it sits outside
-    /// <paramref name="projectRoot"/> altogether, or inside one of the reserved folders. An empty root
-    /// means the caller could not determine one, and nothing is excluded then.
+    /// <paramref name="projectRoot"/> altogether, or inside one of the folders
+    /// <see cref="NamingScopeRules"/> reserves. An assembly routinely references documents from those
+    /// folders and from outside the project root altogether - Content Center parts, 3rd Party Hardware, a
+    /// part owned by another project - and those files belong to someone else: the tool must neither
+    /// rename them nor relocate their originals. An empty root means the caller could not determine one,
+    /// and nothing is excluded then.
     /// </summary>
     private static bool IsOutsideProjectScope(string fullPath, string? projectRoot)
     {
@@ -512,7 +518,7 @@ public sealed class FileNamingWorkflow
         string[] segments = relative.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < segments.Length - 1; i++)
         {
-            if (ScopeExcludedFolderNames.Contains(segments[i], StringComparer.OrdinalIgnoreCase))
+            if (NamingScopeRules.IsExcludedFolderName(segments[i]))
             {
                 return true;
             }
@@ -766,10 +772,13 @@ public sealed class FileNamingWorkflow
     /// full, because "outside the project scope" on its own does not tell an engineer which folder rule
     /// put their file there.
     /// </summary>
-    private static string DescribeOutOfScope(string fileName, string projectRoot) =>
-        $"'{fileName}' is outside the project scope ({projectRoot}, excluding "
-        + $"{string.Join(", ", ScopeExcludedFolderNames[..^1])} and {ScopeExcludedFolderNames[^1]}) "
-        + "and is never renamed.";
+    private static string DescribeOutOfScope(string fileName, string projectRoot)
+    {
+        IReadOnlyList<string> excludedFolders = NamingScopeRules.ExcludedFolderNames;
+        return $"'{fileName}' is outside the project scope ({projectRoot}, excluding "
+            + $"{string.Join(", ", excludedFolders.Take(excludedFolders.Count - 1))} and {excludedFolders[^1]}) "
+            + "and is never renamed.";
+    }
 
     /// <summary>
     /// The one operator-facing sentence for an exhausted series, shared by the row reason and the plan

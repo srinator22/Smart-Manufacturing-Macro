@@ -88,11 +88,15 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         onApplyExecuteHandler = OnApplyNamingExecute;
         applyButtonDefinition.OnExecute += onApplyExecuteHandler;
 
-        if (FirstTime)
+        RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+        RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "File Naming", PanelInternalName, ClientId);
+        if (!WmpRibbonTab.ContainsControl(panel, AnalyzeButtonInternalName))
         {
-            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
-            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "File Naming", PanelInternalName, ClientId);
             panel.CommandControls.AddButton(analyzeButtonDefinition, true, true);
+        }
+
+        if (!WmpRibbonTab.ContainsControl(panel, ApplyButtonInternalName))
+        {
             panel.CommandControls.AddButton(applyButtonDefinition, true, true);
         }
     }

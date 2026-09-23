@@ -70,10 +70,10 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         onExecuteHandler = OnSmartExportExecute;
         buttonDefinition.OnExecute += onExecuteHandler;
 
-        if (FirstTime)
+        RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+        RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "Smart Export", PanelInternalName, ClientId);
+        if (!WmpRibbonTab.ContainsControl(panel, ButtonInternalName))
         {
-            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
-            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, "Smart Export", PanelInternalName, ClientId);
             panel.CommandControls.AddButton(buttonDefinition, true, true);
         }
     }

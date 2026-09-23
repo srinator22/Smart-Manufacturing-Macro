@@ -1,33 +1,40 @@
-# Task: {{title}}
-Mode: standard | quick | autopilot
-Branch: {{branch}}
-Date: {{date}}
+# Task: file-naming-followups
+Mode: autopilot
+Branch: task/file-naming-followups
+Date: 2026-09-23
 
 ## Goal
-{{one paragraph}}
+Close every open File Naming Manager item that does not touch Vault, plus two workspace defects found on the way: per-row include and exclude in the grid so the operator controls exactly which files a run renames; one source of truth for the scope exclusion list with a test pinning the enumeration and the row rule to it; restore mutation coverage of NumberAllocator (Stryker safe mode); make all three add-ins ensure the shared tab and their panel on every Activate rather than only on FirstTime so uninstalling one cannot strand another's panel; fix scripts/new-task.sh direct-to-main detection; add the checker test script for check-live-evidence.sh.
 
 ## Non-goals
-<!-- explicitly out of scope; scope creep gets caught here -->
-- {{out of scope}}
+- Any Vault SDK call or Vault-managed rename execution (the Vault server is being resized; docs/VAULT_RENAME_DESIGN.md stays the plan of record).
+- Live acceptance in Inventor (separate P0 backlog rows).
+- Behaviour changes beyond per-row include/exclude.
 
 ## Budget
-<!-- declare before work starts; on exhaustion: stop, keep the best verified
-     artifact, and report unresolved items with reasons - never hide a partial
-     result behind a fluent answer -->
-- Wall-clock: {{max}}
-- Subagents / workflow runs: {{max}}
-- Retries per failing step: {{max, default 2}}
-- Escalate to human when: {{budget exhausted | criteria unreachable | scope exceeds Non-goals}}
+- Wall-clock: one session
+- Subagents / workflow runs: 6
+- Retries per failing step: 2
+- Escalate to human when: the NumberAllocator restructure would change any allocation result pinned by a golden test, or a follow-up needs Vault.
 
 ## Acceptance criteria
-<!-- each maps to an executable test where possible; list test paths -->
-- [ ] {{criterion}} -> {{test path or "judgment: reason"}}
+- [ ] NamingRowViewModel.IsIncluded (two-way, default true for actionable rows, disabled for Action None); FileNamingViewModel passes excluded FullPaths into RenameOptions.ExcludedPaths (case-insensitive) and re-plans on every toggle; excluded rows get Action None with reason "Excluded by the operator." and never allocate a number or block others; the Vault plan export honours the same exclusions; Select all / Select none buttons. -> unit tests (excluded unmanaged row: no operation, no number consumed; excluded managed row: no Vault instruction; toggle back re-plans), render test asserts the checkbox column, screenshot inspected
+- [ ] Core NamingScopeRules.ExcludedFolderNames and IsExcludedFolderName are the only source of the exclusion list; PhysicalNamingFileSystem and FileNamingWorkflow use it; a test asserts enumeration and row rule agree on a fixture tree containing every excluded folder; NamingPorts.cs references the constant. -> tests
+- [ ] Core mutation run shows no Safe Mode line and includes NumberAllocator; threshold re-measured and set by the standing rule; no golden allocation value changed. -> mutation.sh output recorded here
+- [ ] All three StandardAddInServer.Activate methods ensure the tab and panel and re-add missing buttons on every activation without duplicating controls (CommandControls checked by internal name first); compatibility matrices record the behaviour as live-unverified. -> compile, inspection, architecture tests unchanged
+- [ ] scripts/new-task.sh matches only a Project decisions line that records direct-to-main as the choice; scripts/test-new-task.sh covers the current AGENTS.md line and a synthetic direct-to-main line and is wired into scripts/check.sh. -> gate
+- [ ] projects/file-naming-manager/scripts/test-check-live-evidence.sh covers missing stamp, non-PASS, malformed, stale hash, fresh; wired into the project check.sh. -> gate
+- [ ] README Use section and TEST_PLAN section 2 updated; BACKLOG rows closed. -> inspection
+- [ ] Review PASS, gate green, PR CI and main CI green. -> ship procedure
 
 ## Plan
-1. {{step}}
+1. Workers in parallel on disjoint files: W1 include/exclude (Application + UI + tests + docs); W2 NamingScopeRules + NumberAllocator safe mode + mutation re-measure (Core + Infrastructure + Application workflow line + tests); W3 shared-tab Activate in three add-ins + matrices; W4 workspace scripts (new-task.sh + test, test-check-live-evidence.sh, check.sh wiring).
+2. Advisor: gate, render and inspect the window, review, ship, retro.
 
 ## Progress log
-<!-- timestamped one-liners; this is what survives compaction -->
+- 2026-09-22T23:35Z - Branch opened from main 8e6e4ab (later fast-forwarded to 25c31a4 after the release retro merged). Advisor wrote Core NamingScopeRules first; four workers dispatched on disjoint files: W1 include/exclude (Application, UI, tests, README, TEST_PLAN), W2 scope single source + NumberAllocator restructure + mutation re-measure, W3 tab and panel ensured on every Activate in all three add-ins + ContainsControl in shared WmpRibbon, W4 new-task.sh detection + test, test-check-live-evidence.sh, gate wiring.
+- 2026-09-22T23:58Z - All four workers reported green in isolation: W1 282 unit tests incl. 4 exclusion + 4 view-model + render assertions, screenshot .work/jobs/naming-ui-include.png inspected (enabled boxes on actionable rows, disabled on Action None rows, Select all / Select none present); W2 Core mutation 92.92 % with no Safe Mode line and NumberAllocator in the table (32 killed), thresholds unchanged, golden values unchanged; W3 sln build 0 warnings, architecture tests 6 + 9 + 12; W4 new-task-test OK, live-evidence-test OK. Advisor added the NumberAllocator null-guard test W2 flagged. FileNamingWorkflow.cs changed, so the live smoke is being re-run to refresh the evidence stamp before the gate.
+- 2026-09-23T00:02Z - Live smoke PASS (52 assertions, Inventor 2027 build 310192060, sourceHash c8e5e93a...); stamp refreshed. Gate 1: check: OK - new-task-test OK, project-readmes OK (3), tests 283 + 9 (naming), 55 + 6 (exporter), 342 + 12 (tools manager), packaging OK x3, live-evidence-test OK, live-evidence OK, build-release-test OK, release-test OK, no leaks, mutation naming 93.33 / 94.86 / 97.67 % (no Safe Mode, NumberAllocator measured), exporter 80.00 / 85.11 %, tools manager 92.57 / 92.47 / 79.31 %. Recorded measurements updated in mutation.sh and README.
 
 ## Review verdict
 <!-- written ONLY by the independent reviewer -->

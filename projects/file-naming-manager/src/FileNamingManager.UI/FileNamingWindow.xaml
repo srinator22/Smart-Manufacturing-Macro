@@ -72,17 +72,44 @@
 
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="2*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <DataGrid Grid.Row="0"
+            <StackPanel Grid.Row="0" Margin="0,0,0,6" Orientation="Horizontal">
+                <Button x:Name="SelectAllButton"
+                        Padding="10,3"
+                        Click="SelectAll_Click"
+                        Content="Select all" />
+                <Button x:Name="SelectNoneButton"
+                        Margin="8,0,0,0"
+                        Padding="10,3"
+                        Click="SelectNone_Click"
+                        Content="Select none" />
+                <TextBlock Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="DimGray"
+                           Text="Include column: untick a row to leave it out of the plan." />
+            </StackPanel>
+
+            <DataGrid Grid.Row="1"
                       IsReadOnly="True"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       ItemsSource="{Binding Rows}">
                 <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Include" Width="60" SortMemberPath="IsIncluded">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox HorizontalAlignment="Center"
+                                          AutomationProperties.Name="Include this file in the plan"
+                                          IsChecked="{Binding IsIncluded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding CanToggle}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Current name" Binding="{Binding CurrentFileName}" Width="2*" />
                     <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="*" />
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="*" />
@@ -93,8 +120,8 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <TextBlock Grid.Row="1" Margin="0,12,0,4" FontWeight="SemiBold" Text="Project findings" />
-            <ListBox Grid.Row="2" ItemsSource="{Binding Findings}" />
+            <TextBlock Grid.Row="2" Margin="0,12,0,4" FontWeight="SemiBold" Text="Project findings" />
+            <ListBox Grid.Row="3" ItemsSource="{Binding Findings}" />
         </Grid>
 
         <Separator Grid.Row="3" Margin="0,14,0,10" />

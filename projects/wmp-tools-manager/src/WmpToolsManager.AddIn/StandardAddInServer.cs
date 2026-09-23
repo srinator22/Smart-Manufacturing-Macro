@@ -78,10 +78,10 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         onCheckForUpdatesExecuteHandler = OnCheckForUpdatesExecute;
         checkForUpdatesButtonDefinition.OnExecute += onCheckForUpdatesExecuteHandler;
 
-        if (FirstTime)
+        RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
+        RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, PanelDisplayName, PanelInternalName, ClientId);
+        if (!WmpRibbonTab.ContainsControl(panel, CheckForUpdatesInternalName))
         {
-            RibbonTab tab = WmpRibbonTab.EnsureTab(inventorApplication, "Assembly", ClientId);
-            RibbonPanel panel = WmpRibbonTab.EnsurePanel(tab, PanelDisplayName, PanelInternalName, ClientId);
             panel.CommandControls.AddButton(checkForUpdatesButtonDefinition, true, true);
         }
     }
