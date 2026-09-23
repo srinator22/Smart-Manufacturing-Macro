@@ -35,6 +35,10 @@ field() {
 # by this gate, so ConvertFrom-Json performs a real syntax check - and -NoEnumerate keeps a
 # single-element array from being silently unwrapped into what looks like a bare object -
 # before any field extracted below is trusted.
+# Named before the parse so a machine without PowerShell 7 is told what to install instead of
+# being told its stamp is corrupt.
+command -v pwsh >/dev/null 2>&1 \
+  || fail "LIVE EVIDENCE CHECK NEEDS PWSH: PowerShell 7 (pwsh) is not on PATH; install it to validate $STAMP."
 STAMP_PATH="$STAMP" pwsh -NoProfile -Command '
   try {
     $raw = Get-Content -Raw -LiteralPath $env:STAMP_PATH -ErrorAction Stop

@@ -46,5 +46,7 @@ Round 1 (2026-09-23T00:10Z, reviewer agent, Opus, read-only): FAIL - criterion 7
 
 Round 2 (2026-09-23T00:25Z, same reviewer): PASS - all round 1 items verified closed (BACKLOG rows done with reasons, headers accurate, RenamedOriginalsFolderName the single literal used by construction, contract comment and README clause added, mutation.sh fails on a Safe Mode line); no gate, test or threshold deleted or loosened; refreshed stamp covers the re-edited workflow. Explicitly outstanding at verdict time: gate 2 result and PR/main CI.
 
+Delta (2026-09-23T00:55Z, same reviewer, commit b24f2e1): PASS - BlockedPaths init-only and written only inside the two identity guards with no ordering or text change; HasBlocker recomputed ahead of every early return and forced false when excluded; JSON gate runs before field extraction with -NoEnumerate load-bearing and fixtures that only the parser can fail; direct-to-main detection tightened (8 cases). One should-fix: check-live-evidence.sh discards pwsh stderr, so a missing PowerShell 7 would be reported as invalid JSON - add a command -v pwsh guard with its own message. One nit: SelectNoRows comment omits blocked rows. Gate 3 and PR/main CI outstanding at verdict time.
+
 ## Retro
 <!-- filled by docs/procedures/retro.md -->

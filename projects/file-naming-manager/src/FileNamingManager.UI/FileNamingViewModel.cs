@@ -245,7 +245,7 @@ public sealed class FileNamingViewModel : INotifyPropertyChanged
     public void SelectAllRows() => SetAllRowsIncluded(true);
 
     /// <summary>
-    /// Unticks every row the plan would act on. A row that cannot be toggled is left alone: excluding it
+    /// Unticks every row the plan would act on or has blocked. A row that cannot be toggled is left alone: excluding it
     /// would change no operation while putting "Excluded by the operator." on a row nobody excluded.
     /// </summary>
     public void SelectNoRows() => SetAllRowsIncluded(false);
