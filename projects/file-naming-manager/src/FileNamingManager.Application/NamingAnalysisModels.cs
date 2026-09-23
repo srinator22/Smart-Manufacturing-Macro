@@ -68,7 +68,8 @@ public sealed record RenameOptions(
     /// <summary>
     /// Full paths the operator has taken out of the plan row by row. Plan skips them before it builds a
     /// proposal, exactly like the three option gates above, so an excluded row consumes no number and
-    /// raises no blocker. It is an init-only member rather than a fourth positional parameter because a
+    /// raises no blocker. Only part and assembly rows are reachable: a drawing or presentation row never
+    /// carries an action of its own and follows its model, so its path here has no effect. It is an init-only member rather than a fourth positional parameter because a
     /// positional default cannot be an empty collection. Comparison is case-insensitive in the workflow.
     /// Callers pass a snapshot, never a live collection: a plan that aliased the caller's set would
     /// silently change meaning the next time the operator ticked a box.

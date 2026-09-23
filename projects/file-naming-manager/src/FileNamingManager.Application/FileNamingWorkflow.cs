@@ -301,7 +301,7 @@ public sealed class FileNamingWorkflow
         Dictionary<string, string> renamedPaths = new(StringComparer.OrdinalIgnoreCase);
         string originalsRoot = Path.Combine(
             plan.ProjectRootPath,
-            "_renamed-originals",
+            NamingScopeRules.RenamedOriginalsFolderName,
             clock.UtcNow.ToString("yyyyMMddTHHmmss'Z'", CultureInfo.InvariantCulture));
 
         Dictionary<string, string> preOpenFailures = PreOpenCompanionDrawings(plan);
@@ -435,8 +435,8 @@ public sealed class FileNamingWorkflow
             {
                 string escapeError =
                     $"'{entry.OriginalPath}' is outside the project root '{plan.ProjectRootPath}', so archiving "
-                    + "it would move it outside '_renamed-originals'; the rename stands and the original was "
-                    + "left in place.";
+                    + $"it would move it outside '{NamingScopeRules.RenamedOriginalsFolderName}'; the rename stands "
+                    + "and the original was left in place.";
                 archiveFailures.Add(new ArchiveFailure(entry.OriginalPath, escapeError));
                 archivedEntries.Add(entry with { Error = escapeError });
                 continue;

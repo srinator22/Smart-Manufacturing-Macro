@@ -12,8 +12,14 @@ namespace FileNamingManager.Core;
 
 public static class NamingScopeRules
 {
+    /// <summary>
+    /// The folder under the project root where this tool archives originals it renamed. It is excluded
+    /// from the scope by the same list, so the archive can never feed numbers back into allocation.
+    /// </summary>
+    public const string RenamedOriginalsFolderName = "_renamed-originals";
+
     public static IReadOnlyList<string> ExcludedFolderNames { get; } =
-        ["OldVersions", "_V", "3rd Party Hardware", "Content Center Files", "_renamed-originals"];
+        ["OldVersions", "_V", "3rd Party Hardware", "Content Center Files", RenamedOriginalsFolderName];
 
     public static bool IsExcludedFolderName(string folderName)
     {

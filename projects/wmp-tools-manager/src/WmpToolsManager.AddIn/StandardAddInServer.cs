@@ -4,7 +4,8 @@
 // Outputs: One ribbon command that opens the update window, composed over the real release source,
 //   install state, hash verifier and process launcher.
 // Dependencies: Inventor interop, Infrastructure/Application/UI, and the shared WmpRibbon tab.
-// Assumptions: Inventor owns activation and callback threading; FirstTime controls UI creation. The
+// Assumptions: Inventor owns activation and callback threading. The tab, panel and button are ensured on
+//   every Activate, not only when FirstTime is true, so a ribbon rebuild cannot strand the panel. The
 //   HttpClient is created once per session and disposed on Deactivate, because a new client per check
 //   would leak sockets. The add-in writes nothing into the Addins folder itself: it stages under
 //   %LOCALAPPDATA% and hands the apply step to a PowerShell process that outlives the host.

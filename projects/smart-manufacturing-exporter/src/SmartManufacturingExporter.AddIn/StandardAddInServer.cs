@@ -3,7 +3,9 @@
 // Inputs: Inventor activation lifecycle and retained button OnExecute events.
 // Outputs: One Smart Export ribbon command delegating to SmartExportCommand.
 // Dependencies: Inventor interop, Phase 1 adapters, workflow, WPF host, and the shared WmpRibbon tab.
-// Assumptions: Inventor owns activation and callback threading; firstTime controls UI creation.
+// Assumptions: Inventor owns activation and callback threading. The tab, panel and buttons are ensured on
+//   every Activate, not only when FirstTime is true, so a ribbon rebuild or another add-in's uninstall cannot
+//   strand this panel; FirstTime is therefore unused.
 // Validation source: Installed Inventor 2027 interop contracts and Autodesk C# add-in template.
 
 #if INVENTOR_INTEROP

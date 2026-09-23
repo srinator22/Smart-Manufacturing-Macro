@@ -68,4 +68,11 @@ for i in "${!project_names[@]}"; do
     echo "MUTATION FAILED: project $name did not report a mutation score" >&2
     exit 1
   fi
+
+  # A Safe Mode run rolls back the mutants that failed to compile and still prints a score, so the
+  # score alone cannot show that every file was measured. NumberAllocator lost its coverage that way once.
+  if grep -Eqi 'safe mode' "$result_file"; then
+    echo "MUTATION FAILED: project $name ran in Stryker Safe Mode; some mutants were rolled back unmeasured" >&2
+    exit 1
+  fi
 done

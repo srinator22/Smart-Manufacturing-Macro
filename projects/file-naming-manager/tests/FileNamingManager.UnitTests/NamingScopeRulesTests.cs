@@ -55,6 +55,13 @@ public class NamingScopeRulesTests
     }
 
     [Fact]
+    public void RenamedOriginalsArchiveFolderIsExcludedFromTheScope()
+    {
+        Assert.Contains(NamingScopeRules.RenamedOriginalsFolderName, NamingScopeRules.ExcludedFolderNames);
+        Assert.True(NamingScopeRules.IsExcludedFolderName(NamingScopeRules.RenamedOriginalsFolderName));
+    }
+
+    [Fact]
     public void NullFolderNameThrowsNamingTheOffendingParameter()
     {
         Assert.Throws<ArgumentNullException>("folderName", () => NamingScopeRules.IsExcludedFolderName(null!));
