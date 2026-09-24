@@ -18,6 +18,8 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - State the escaped and human-reported defect routes in both archived retros
 - Ribbon icon guide for agents adding tools and icons
 - Record the gate and review verdicts for the ribbon icon restyle
+- Archive ribbon icon restyle task
+- Keep the enlarged-icon live check in the backlog
 
 ### Fixed
 - Close the review findings on the follow-ups
