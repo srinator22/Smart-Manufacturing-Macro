@@ -8,16 +8,19 @@
 #   tag, runs the gate, and creates a DRAFT release with notes and no assets; this script is the one
 #   place assets are built and attached (ADR-0005, 2026-09-24 amendment).
 # Inputs: -Version (the release version without the leading v), -Repo (owner/name), -DistRoot
-#   (optional; passed to build-release.ps1), -SkipBuild (package the existing Release output),
-#   -AllowUntagged (package a HEAD that is not the tag; printed loudly), -DryRun or -WhatIf (stop
-#   after the interop guard and print what would be uploaded, without calling GitHub).
+#   (optional; passed to build-release.ps1), -DryRun or -WhatIf (stop after the interop guard and
+#   print what would be uploaded, without calling GitHub), -SkipBuild (dry run only: package the
+#   existing Release output), -AllowUntagged (dry run only: waive the tag check), and
+#   -ReplacePublishedAssets (overwrite the assets of a release that is already published; the
+#   documented repair path for a broken release, still from the tag with a clean tree).
 # Outputs: the three release assets uploaded to v<Version>, the release published (non-draft), and
 #   the asset list GitHub reports afterwards.
 # Dependencies: Windows PowerShell 5.1 or later, git, gh (authenticated for -Repo), the .NET SDK
 #   pinned by global.json, Inventor 2027 installed, build-release.ps1 beside this script.
 # Assumptions: The draft release v<Version> already exists because the tag push ran
-#   .github/workflows/release.yml. The working tree is clean and at the tag, so the uploaded binaries
-#   are built from exactly the commit the tag names.
+#   .github/workflows/release.yml. A real run is built from exactly the commit the tag names with a
+#   clean tree: bin/ and dist/ are gitignored, so the clean-tree check cannot see stale Release output,
+#   which is why a real run always rebuilds and never waives the tag check.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory = $true)]
@@ -30,6 +33,8 @@ param(
     [switch]$SkipBuild,
 
     [switch]$AllowUntagged,
+
+    [switch]$ReplacePublishedAssets,
 
     [switch]$DryRun
 )
@@ -52,6 +57,8 @@ $distRoot = [System.IO.Path]::GetFullPath($DistRoot)
 $zipPath = Join-Path $distRoot "WmpInventorTools-$Version.zip"
 $sumsPath = Join-Path $distRoot "SHA256SUMS.txt"
 $installerPath = Join-Path (Join-Path $distRoot "WmpInventorTools-$Version") "Install-WmpInventorTools.ps1"
+$assets = @($zipPath, $sumsPath, $installerPath)
+$assetNames = @($assets | ForEach-Object { [System.IO.Path]::GetFileName($_) })
 # Same default as InventorInteropPath in every add-in csproj; if this file is absent the build
 # compiles the add-in entry points out.
 $interopPath = Join-Path $env:ProgramFiles "Autodesk\Inventor 2027\Bin\Public Assemblies\Autodesk.Inventor.Interop.dll"
@@ -82,6 +89,22 @@ function Invoke-Gh {
     return (($output | Out-String).TrimEnd())
 }
 
+# The switches that weaken a check are dry-run only, and are rejected before anything is read, built
+# or sent. -SkipBuild would package gitignored bin/Release output the clean-tree check cannot see, and
+# -AllowUntagged would upload binaries that the tag does not name; both are exactly how a release ends
+# up with assets nobody can reproduce from its tag.
+if (-not $isDryRun) {
+    if ($AllowUntagged) {
+        throw "publish-release: -AllowUntagged is accepted only with -DryRun or -WhatIf; a real publish must be built from the commit $tag names. Check out $tag, or add -DryRun to exercise the build and the interop guard from this HEAD."
+    }
+    if ($SkipBuild) {
+        throw "publish-release: -SkipBuild is accepted only with -DryRun or -WhatIf; bin/Release is gitignored, so the clean-tree check cannot prove existing output was built from $tag. Drop -SkipBuild so the package is rebuilt from the tag."
+    }
+}
+if ($ReplacePublishedAssets -and $AllowUntagged) {
+    throw "publish-release: -ReplacePublishedAssets cannot be combined with -AllowUntagged; replacing published assets requires HEAD at $tag and a clean tree."
+}
+
 if ($isDryRun) {
     Write-Output "publish-release: DRY RUN - builds and runs the interop guard, then stops before any GitHub call."
 }
@@ -102,7 +125,7 @@ if ($tagProbeExit -eq 0) {
 if ($null -eq $tagCommit) {
     $reason = "the tag $tag does not exist locally; fetch tags (git fetch --tags) or push the tag first."
     if ($AllowUntagged) {
-        Write-Warning "publish-release: -AllowUntagged - $reason Packaging HEAD $head anyway."
+        Write-Warning "publish-release: -AllowUntagged (dry run) - $reason Packaging HEAD $head anyway."
     }
     else {
         $refusals += $reason
@@ -111,7 +134,7 @@ if ($null -eq $tagCommit) {
 elseif ($head -ne $tagCommit) {
     $reason = "HEAD $head is not the commit $tagCommit that $tag names; check out the tag so the binaries match the release."
     if ($AllowUntagged) {
-        Write-Warning "publish-release: -AllowUntagged - $reason Packaging HEAD anyway; the uploaded binaries will NOT be built from $tag."
+        Write-Warning "publish-release: -AllowUntagged (dry run) - $reason Packaging HEAD anyway; a real run refuses this."
     }
     else {
         $refusals += $reason
@@ -127,6 +150,54 @@ if ($refusals.Count -gt 0 -and -not $isDryRun) {
     throw ("publish-release: refusing to publish $tag`: " + ($refusals -join "`n"))
 }
 
+# The release state is read before the build, so a release that must not be touched is refused
+# without a multi-minute build. A dry run never calls GitHub, so it can only describe this step.
+$releaseIsDraft = $true
+if (-not $isDryRun) {
+    $release = Invoke-Gh @("release", "view", $tag, "--repo", $Repo, "--json", "tagName,isDraft,assets") | ConvertFrom-Json
+    $releaseIsDraft = [bool]$release.isDraft
+    if (-not $releaseIsDraft) {
+        if (-not $ReplacePublishedAssets) {
+            throw "publish-release: $tag is already published (not a draft); refusing to replace its assets. Users may already have installed them. To repair a broken release in place, re-run from $tag with a clean tree and -ReplacePublishedAssets (ADR-0005 2026-09-24 amendment, docs/procedures/ship.md step 8)."
+        }
+
+        Write-Output "publish-release: -ReplacePublishedAssets - $tag is published; these assets will be overwritten:"
+        $publishedAssets = @($release.assets)
+        $overwritten = @($publishedAssets | Where-Object { $assetNames -contains $_.name })
+        if ($overwritten.Count -eq 0) {
+            Write-Output "  (none of $($assetNames -join ', ') is on $tag yet; they will be added)"
+        }
+        foreach ($asset in $overwritten) {
+            Write-Output ("  {0} ({1} bytes)" -f $asset.name, $asset.size)
+        }
+        foreach ($asset in @($publishedAssets | Where-Object { $assetNames -notcontains $_.name })) {
+            Write-Output ("  kept, not part of the package: {0} ({1} bytes)" -f $asset.name, $asset.size)
+        }
+
+        if (@($publishedAssets | Where-Object { $_.name -eq "SHA256SUMS.txt" }).Count -eq 0) {
+            Write-Output "publish-release: current published digests: N/A - $tag has no SHA256SUMS.txt asset."
+        }
+        else {
+            $publishedSumsPath = Join-Path ([System.IO.Path]::GetTempPath()) ("publish-release-" + [guid]::NewGuid().ToString("N") + "-SHA256SUMS.txt")
+            try {
+                Invoke-Gh @("release", "download", $tag, "--repo", $Repo, "--pattern", "SHA256SUMS.txt", "--output", $publishedSumsPath, "--clobber") | Out-Null
+                Write-Output "publish-release: current published SHA256SUMS.txt on $tag`:"
+                foreach ($line in @(Get-Content -LiteralPath $publishedSumsPath)) {
+                    if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Output "  $line" }
+                }
+            }
+            finally {
+                if (Test-Path -LiteralPath $publishedSumsPath -PathType Leaf) {
+                    Remove-Item -LiteralPath $publishedSumsPath -Force
+                }
+            }
+        }
+    }
+    elseif ($ReplacePublishedAssets) {
+        Write-Output "publish-release: $tag is still a draft; -ReplacePublishedAssets is not needed and changes nothing."
+    }
+}
+
 if (-not (Test-Path -LiteralPath $interopPath -PathType Leaf)) {
     throw "publish-release: Autodesk.Inventor.Interop.dll is not at '$interopPath'. Run this on a machine with Inventor 2027 installed; without it every add-in compiles its entry point out."
 }
@@ -137,46 +208,54 @@ Write-Output "publish-release: Inventor interop found at $interopPath"
 $buildArguments = @{ Version = $Version; DistRoot = $distRoot }
 if ($SkipBuild) { $buildArguments["SkipBuild"] = $true }
 & $buildScript @buildArguments
-foreach ($asset in @($zipPath, $sumsPath, $installerPath)) {
+foreach ($asset in $assets) {
     if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
         throw "publish-release: build-release.ps1 finished but '$asset' is missing."
     }
 }
 
-$assets = @($zipPath, $sumsPath, $installerPath)
 if ($isDryRun) {
     Write-Output "publish-release: DRY RUN - the interop guard passed. Would upload to $Repo release $tag`:"
     foreach ($asset in $assets) {
         $item = Get-Item -LiteralPath $asset
         Write-Output ("  {0} ({1} bytes)" -f $item.FullName, $item.Length)
     }
-    Write-Output "publish-release: DRY RUN - would run: gh release view $tag --repo $Repo"
+    Write-Output "publish-release: DRY RUN - would run: gh release view $tag --repo $Repo (refused unless a draft, or -ReplacePublishedAssets is given)"
     Write-Output "publish-release: DRY RUN - would run: gh release upload $tag <the three files above> --repo $Repo --clobber"
     Write-Output "publish-release: DRY RUN - would run: gh release edit $tag --repo $Repo --draft=false"
+    if ($SkipBuild) {
+        Write-Output "publish-release: DRY RUN - packaged the existing Release output (-SkipBuild); a real run rebuilds from $tag."
+    }
     if ($refusals.Count -gt 0) {
         Write-Output "publish-release: DRY RUN - a real run would be REFUSED:"
         foreach ($reason in $refusals) { Write-Output "  - $reason" }
         exit 1
     }
+    if ($AllowUntagged) {
+        Write-Output "publish-release: DRY RUN - OK, but the tag check was waived by -AllowUntagged, which a real run does not accept."
+        exit 0
+    }
     Write-Output "publish-release: DRY RUN - OK; a real run would publish."
     exit 0
 }
 
-$releaseJson = Invoke-Gh @("release", "view", $tag, "--repo", $Repo, "--json", "tagName,isDraft")
-$release = $releaseJson | ConvertFrom-Json
-if (-not $release.isDraft) {
-    Write-Warning "publish-release: $tag is already published; its assets will be replaced (--clobber)."
+if (-not $releaseIsDraft) {
+    Write-Output "publish-release: replacing the published assets of $tag with:"
+    foreach ($line in @(Get-Content -LiteralPath $sumsPath)) {
+        if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Output "  $line" }
+    }
 }
 
 Invoke-Gh (@("release", "upload", $tag) + $assets + @("--repo", $Repo, "--clobber")) | Out-Null
 Write-Output "publish-release: uploaded $($assets.Count) assets to $tag"
-Invoke-Gh @("release", "edit", $tag, "--repo", $Repo, "--draft=false") | Out-Null
-Write-Output "publish-release: $tag is published"
+if ($releaseIsDraft) {
+    Invoke-Gh @("release", "edit", $tag, "--repo", $Repo, "--draft=false") | Out-Null
+    Write-Output "publish-release: $tag is published"
+}
 
 $published = Invoke-Gh @("release", "view", $tag, "--repo", $Repo, "--json", "isDraft,assets") | ConvertFrom-Json
 $names = @($published.assets | ForEach-Object { $_.name })
-foreach ($asset in $assets) {
-    $name = [System.IO.Path]::GetFileName($asset)
+foreach ($name in $assetNames) {
     if ($names -notcontains $name) {
         throw "publish-release: GitHub does not list '$name' on $tag after upload."
     }

@@ -138,7 +138,7 @@ function Get-AddInAssemblyFacts {
     }
 }
 
-$versionPrefix =Get-VersionPrefix -PropsPath (Join-Path $repoRoot "Directory.Build.props")
+$versionPrefix = Get-VersionPrefix -PropsPath (Join-Path $repoRoot "Directory.Build.props")
 if ($Version -ne $versionPrefix) {
     throw "Requested version '$Version' does not match Directory.Build.props VersionPrefix '$versionPrefix'."
 }
@@ -266,7 +266,7 @@ foreach ($plugin in $plugins) {
         $interopFailures += "  $sourceAssembly ($($plugin.Definition.id)): $($missing -join ' and ') [checked by $($facts.Method)]"
     }
     else {
-        Write-Output "build-release: interop guard OK for $($plugin.Definition.id) (references Autodesk.Inventor.Interop, defines StandardAddInServer)"
+        Write-Output "build-release: interop guard OK for $($plugin.Definition.id) (references Autodesk.Inventor.Interop, defines StandardAddInServer) [checked by $($facts.Method)]"
     }
 }
 if ($interopFailures.Count -gt 0) {

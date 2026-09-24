@@ -39,7 +39,15 @@ SHA is terminal-success (kernel rule 5).
       X.Y.Z` (the workflow prints this command). It builds, runs the
       interop guard, uploads `WmpInventorTools-<version>.zip`,
       `SHA256SUMS.txt`, and `Install-WmpInventorTools.ps1`, and publishes
-      the draft. `-DryRun` stops after the guard without touching GitHub.
+      the draft. `-DryRun` (or `-WhatIf`) stops after the guard without
+      touching GitHub. `-AllowUntagged` and `-SkipBuild` are dry-run only;
+      a real run with either stops before building.
+   c2. Repair: a release that is already published is refused. To replace
+      the assets of a broken published release, run the same command from
+      the tag with a clean tree plus `-ReplacePublishedAssets`; it prints
+      the asset names it will overwrite and the digests in the currently
+      published `SHA256SUMS.txt` before it builds and uploads. The
+      alternative is superseding it with the next patch release.
    d. Watch: confirm `gh release view vX.Y.Z --json isDraft,assets` shows
       `isDraft: false` and all three assets. A tag or a draft alone is not
       a release.

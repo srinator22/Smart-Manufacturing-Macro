@@ -46,3 +46,11 @@ Every add-in project references `Autodesk.Inventor.Interop.dll` from the Invento
 - A tag alone is still not a release, and now neither is the workflow run: a release is done only when `publish-release.ps1` has reported the three assets on a non-draft release.
 - The release binaries are built on a developer machine, not in CI. Reproducibility rests on the tag check, the clean-tree check, the pinned SDK, and the guard; this is accepted for three internal users.
 - The `v0.6.0` tag predates `publish-release.ps1` and the guard, so its published assets are not repaired by this change; replacing them in place or superseding them with the next release is a separate decision.
+
+### Publish refusals (review follow-up, 2026-09-24)
+
+An independent review found that `-AllowUntagged` turned the tag check into a warning on a real run, that `-SkipBuild` let a real run package gitignored `bin/Release` output the clean-tree check cannot see, and that an already-published release was accepted with a warning and then overwritten with `--clobber`. The rules are now:
+
+1. **`-AllowUntagged` and `-SkipBuild` are dry-run only.** A real run with either stops with an error before it reads the release, builds or uploads. A real publish is always rebuilt from the commit the tag names with a clean tree.
+2. **A published release is refused by default.** A real run reads the release state before it builds; a release that is no longer a draft is refused unless `-ReplacePublishedAssets` is given. That switch is the documented path for repairing a broken release in place. It still requires HEAD at the tag and a clean tree, cannot be combined with `-AllowUntagged`, and prints the asset names it will overwrite and the digests in the currently published `SHA256SUMS.txt` before it builds, then the new digests before it uploads. It does not re-run `--draft=false` on a release that is already published.
+3. **The refusals are tested.** `scripts/release/test-publish-release.sh` runs against a throwaway clone tagged `v9.9.9`, with `gh` shadowed by a logging shim, and asserts each refusal happens before any build or GitHub write and that a dry run makes no `gh` call.

@@ -83,6 +83,7 @@ dotnet run --project shared/WmpIconRenderer -c Debug --no-build -- --check
 # trees (duplicate ids, folders, manifests), then the real package installed into an isolated
 # Addins root, verifying digests, idempotence, rollback and the console-safe failure paths.
 bash ./scripts/release/test-build-release.sh
+bash ./scripts/release/test-publish-release.sh
 bash ./scripts/release/test-release.sh
 
 # Step 10: secret scan over Git history and the working tree.
