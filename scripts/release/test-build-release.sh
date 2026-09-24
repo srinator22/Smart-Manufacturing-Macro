@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # test-build-release.sh - Asserts build-release.ps1 rejects a catalog set with a duplicate id,
 #   installDirectory, or derived manifest name, and rejects an invalid id, before any build or
-#   staging happens; and that two clean, distinct catalogs clear validation.
+#   staging happens; that two clean, distinct catalogs clear validation; and that an add-in built
+#   without the Inventor interop is refused before anything is staged.
 #
 # Purpose: Prove the catalog-uniqueness gate in build-release.ps1 fires for each of the three
 #   collision fields plus the id format, names both offending catalog files (and, for the id
@@ -10,7 +11,10 @@
 #   "Release output ... is missing" check instead of a validation error.
 # Inputs: the working tree; run from anywhere, the script resolves the repository root itself.
 # Outputs: "build-release-test: OK" on success; a non-zero exit and a named failure otherwise.
-# Dependencies: bash, PowerShell 7 (pwsh), cygpath.
+#   The interop-guard case compiles one real add-in project with InventorInteropPath pointed at a
+#   file that does not exist, which is exactly the shape a runner without Inventor produced for
+#   v0.6.0, and asserts the packager names that DLL and the missing interop.
+# Dependencies: bash, PowerShell 7 (pwsh), cygpath, the .NET SDK.
 # Assumptions: build-release.ps1 accepts -ProjectsRoot and -DistRoot, so fixtures never sit under
 #   projects/ and nothing is written under the repo's dist/.
 set -euo pipefail
@@ -23,6 +27,7 @@ need() { command -v "$1" >/dev/null 2>&1 || fail "$1 is required but was not fou
 
 need pwsh
 need cygpath
+need dotnet
 
 VERSION="$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props | head -n1)"
 [[ -n "$VERSION" ]] || fail "could not read VersionPrefix from Directory.Build.props"
@@ -173,5 +178,44 @@ run_case "$VALID_ROOT"
 grep -q "Release output" <<<"$CASE_OUTPUT" && grep -q "is missing" <<<"$CASE_OUTPUT" \
   || fail "the valid fixture pair failed before the Release-output check, so validation was not proven: $CASE_OUTPUT"
 echo "build-release-test: distinct catalogs pass validation OK"
+
+# --- an add-in compiled without the Inventor interop is refused ----------------------
+# Every add-in csproj defines INVENTOR_INTEROP only when Autodesk.Inventor.Interop.dll exists, so a
+# build without it still succeeds and yields a DLL with no StandardAddInServer and no interop
+# reference. The custom configuration keeps this build's bin/ and obj/ apart from Debug and Release,
+# so the interop-less intermediates never feed a real package.
+GUARD_PROJECT="projects/wmp-tools-manager/src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj"
+GUARD_PLUGIN_DIR="projects/wmp-tools-manager"
+GUARD_ASSEMBLY="WmpToolsManager.AddIn.dll"
+GUARD_BUILD_OUT="$WORK_ROOT/no-interop-build"
+[[ -f "$GUARD_PROJECT" ]] || fail "the interop-guard case expects $GUARD_PROJECT"
+dotnet restore "$GUARD_PROJECT" --locked-mode >/dev/null \
+  || fail "could not restore $GUARD_PROJECT for the interop-guard case"
+dotnet build "$GUARD_PROJECT" -c GuardFixture --no-restore \
+  "-p:InventorInteropPath=$(cygpath -w "$WORK_ROOT/definitely-missing/Autodesk.Inventor.Interop.dll")" \
+  -o "$(cygpath -w "$GUARD_BUILD_OUT")" >/dev/null \
+  || fail "could not build $GUARD_PROJECT without the Inventor interop"
+[[ -f "$GUARD_BUILD_OUT/$GUARD_ASSEMBLY" ]] || fail "the interop-less build did not produce $GUARD_ASSEMBLY"
+
+# The fixture mirrors the real plugin's layout: its own plugin.json and template, a placeholder
+# csproj, and the interop-less DLL where build-release.ps1 looks for Release output.
+GUARD_ROOT="$WORK_ROOT/no-interop"
+GUARD_FIXTURE="$GUARD_ROOT/wmp-tools-manager"
+GUARD_OUTPUT_DIR="$GUARD_FIXTURE/src/WmpToolsManager.AddIn/bin/Release/net10.0-windows"
+mkdir -p "$GUARD_FIXTURE/packaging" "$GUARD_OUTPUT_DIR"
+cp "$GUARD_PLUGIN_DIR/plugin.json" "$GUARD_FIXTURE/plugin.json"
+cp "$GUARD_PLUGIN_DIR/packaging/Autodesk.WmpToolsManager.Inventor.addin.template" "$GUARD_FIXTURE/packaging/"
+: > "$GUARD_FIXTURE/src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj"
+cp "$GUARD_BUILD_OUT/$GUARD_ASSEMBLY" "$GUARD_OUTPUT_DIR/"
+
+run_case "$GUARD_ROOT"
+[[ "$CASE_RC" -ne 0 ]] || fail "an add-in built without the Inventor interop was packaged (exit 0); expected a refusal"
+grep -q "$GUARD_ASSEMBLY" <<<"$CASE_OUTPUT" || fail "the interop refusal did not name $GUARD_ASSEMBLY: $CASE_OUTPUT"
+grep -q "without the Inventor interop" <<<"$CASE_OUTPUT" || fail "the interop refusal did not say the build ran without the Inventor interop: $CASE_OUTPUT"
+grep -q "Autodesk.Inventor.Interop" <<<"$CASE_OUTPUT" || fail "the interop refusal did not name the missing reference: $CASE_OUTPUT"
+grep -q "StandardAddInServer" <<<"$CASE_OUTPUT" || fail "the interop refusal did not name the missing entry point: $CASE_OUTPUT"
+dist_stage_exists && fail "the interop-less case wrote '$DIST_STAGE'" || true
+[[ ! -e "$DIST_ROOT/WmpInventorTools-$VERSION.zip" ]] || fail "the interop-less case produced a zip"
+echo "build-release-test: add-in built without the Inventor interop refused, no dist write OK"
 
 echo "build-release-test: OK"

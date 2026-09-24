@@ -26,3 +26,23 @@ Installing an add-in today means cloning the repository, having the .NET SDK, bu
 - Bundling an updater executable: introduces the one artifact SmartScreen would flag and gains nothing PowerShell cannot do.
 - Silent auto-update on Inventor start: violates the workspace's rule that outward-facing or irreversible actions need a human decision, and engineering tooling must not change under a user mid-project.
 - Self-signed certificate: Windows treats it as untrusted unless installed on every machine, which is more work than the problem.
+
+## Amendment 2026-09-24: add-in assets are built on a machine with Inventor 2027
+
+Status: Accepted 2026-09-24 (P0 defect: v0.6.0 shipped add-ins that do not load).
+
+### Why CI cannot build the add-ins
+
+Every add-in project references `Autodesk.Inventor.Interop.dll` from the Inventor 2027 install and defines `INVENTOR_INTEROP` only when that file exists. The interop assembly is Autodesk's and ships only with Inventor, so a GitHub-hosted runner does not have it and it may not be committed (Project decisions data policy). Without it the build still succeeds: every `#if INVENTOR_INTEROP` block, including `StandardAddInServer`, compiles out. The v0.6.0 release workflow did exactly that; its three add-in DLLs (6.6 to 9.7 KB) load in Inventor as Unloaded with no ribbon command, and the packaging step only checked that each DLL existed.
+
+### What changes
+
+1. **Decision 1 is amended: the release workflow no longer builds or attaches binaries.** A `v*` tag push runs `.github/workflows/release.yml`, which verifies the tag equals `Directory.Build.props` VersionPrefix, runs the full gate, composes the notes from the CHANGELOG section plus the plugins-and-maturity table read from `projects/*/plugin.json`, and creates the GitHub Release as a **draft** with those notes and no assets. Its last step prints the publish command. A draft is not returned by the Releases `latest` API, so neither the installer one-liner nor the Tools Manager updater can see a release before its assets exist.
+2. **Publishing is a developer-machine step.** On a machine with Inventor 2027, at the tag with a clean tree, the developer runs `pwsh -File scripts/release/publish-release.ps1 -Version <version>`. It refuses a HEAD that is not the tag or a dirty tree, requires the interop at the default `InventorInteropPath`, runs `build-release.ps1`, uploads `WmpInventorTools-<version>.zip`, `SHA256SUMS.txt` and `Install-WmpInventorTools.ps1` to the draft, publishes it, and prints the asset list GitHub reports. `-DryRun` (or `-WhatIf`) stops after the guard and prints what would be uploaded.
+3. **The package is guarded.** `build-release.ps1` reads each add-in assembly's metadata before anything under `dist/` is written and refuses the package, naming each DLL, unless it references `Autodesk.Inventor.Interop` and defines a type named `StandardAddInServer`. `scripts/release/test-build-release.sh` proves the refusal against a real add-in compiled with a missing `InventorInteropPath`; `scripts/release/test-release.sh` proves the real Release output passes on a machine with Inventor and is refused on one without, where it then exercises the installer over a stub add-in that carries both metadata facts.
+
+### Consequences
+
+- A tag alone is still not a release, and now neither is the workflow run: a release is done only when `publish-release.ps1` has reported the three assets on a non-draft release.
+- The release binaries are built on a developer machine, not in CI. Reproducibility rests on the tag check, the clean-tree check, the pinned SDK, and the guard; this is accepted for three internal users.
+- The `v0.6.0` tag predates `publish-release.ps1` and the guard, so its published assets are not repaired by this change; replacing them in place or superseding them with the next release is a separate decision.

@@ -82,12 +82,12 @@ jobs:
         shell: bash
         run: ./scripts/check.sh
 
-      - name: Build the release package
-        shell: pwsh
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.value }}
-        run: ./scripts/release/build-release.ps1 -Version $env:RELEASE_VERSION
-
+      # No step here builds or uploads add-in binaries. Autodesk.Inventor.Interop.dll ships only with
+      # an Inventor install, and without it every add-in compiles its entry point out and loads in
+      # Inventor as Unloaded (v0.6.0). The gate above packages the release to test the installer; the
+      # assets users install are built by scripts/release/publish-release.ps1 on a machine with
+      # Inventor 2027, which attaches them to the draft created below and publishes it (ADR-0005,
+      # 2026-09-24 amendment).
       - name: Compose the release notes
         id: notes
         shell: pwsh
@@ -111,14 +111,21 @@ jobs:
             throw "CHANGELOG.md has no section for $version."
           }
 
-          $catalogPath = "dist/WmpInventorTools-$version/catalog.json"
-          $catalog = Get-Content -Raw -LiteralPath $catalogPath | ConvertFrom-Json
+          # The same catalogs, in the same order, that build-release.ps1 packages.
+          $catalogFiles = @(Get-ChildItem -LiteralPath "projects" -Directory |
+            Sort-Object FullName |
+            ForEach-Object { Join-Path $_.FullName "plugin.json" } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+          if ($catalogFiles.Count -eq 0) {
+            throw "No projects/*/plugin.json catalogs were found."
+          }
           $section.Add("")
           $section.Add("## Plugins in this release")
           $section.Add("")
           $section.Add("| Plugin | Name | Maturity |")
           $section.Add("| --- | --- | --- |")
-          foreach ($plugin in @($catalog.plugins)) {
+          foreach ($catalogFile in $catalogFiles) {
+            $plugin = Get-Content -Raw -LiteralPath $catalogFile | ConvertFrom-Json
             $section.Add("| $($plugin.id) | $($plugin.displayName) | $($plugin.maturity) |")
           }
 
@@ -129,7 +136,7 @@ jobs:
             [System.Text.UTF8Encoding]::new($false))
           "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Publish the GitHub release
+      - name: Create the draft GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,8 +145,27 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
-            "dist/WmpInventorTools-${RELEASE_VERSION}.zip" \
-            "dist/SHA256SUMS.txt" \
-            "dist/WmpInventorTools-${RELEASE_VERSION}/Install-WmpInventorTools.ps1" \
+            --draft \
+            --verify-tag \
             --title "WMP Inventor Tools ${RELEASE_VERSION}" \
             --notes-file "$NOTES_FILE"
+
+      - name: Print the publish command
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          command="pwsh -File scripts/release/publish-release.ps1 -Version ${RELEASE_VERSION}"
+          echo "Draft release $GITHUB_REF_NAME created with notes and no assets."
+          echo "To attach the add-in assets and publish it, run on a machine with Inventor 2027, at tag $GITHUB_REF_NAME with a clean tree:"
+          echo "  $command"
+          {
+            echo "### Draft release $GITHUB_REF_NAME created - not yet published"
+            echo ""
+            echo "It has notes and no assets. On a machine with Inventor 2027, at tag \`$GITHUB_REF_NAME\` with a clean tree, run:"
+            echo ""
+            echo "\`\`\`"
+            echo "$command"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
