@@ -4,35 +4,35 @@
     <GeometryDrawing.Geometry>
       <CombinedGeometry GeometryCombineMode="Exclude">
         <CombinedGeometry.Geometry1>
-          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M9,7 L26,7 L26,23 L9,23 L2,15 Z">
+          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M8,3 L27,3 L27,21 L8,21 L1,12 Z">
             <CombinedGeometry.Geometry2>
-              <EllipseGeometry Center="8,15" RadiusX="1.75" RadiusY="1.75" />
+              <EllipseGeometry Center="7,12" RadiusX="2" RadiusY="2" />
             </CombinedGeometry.Geometry2>
           </CombinedGeometry>
         </CombinedGeometry.Geometry1>
         <CombinedGeometry.Geometry2>
-          <EllipseGeometry Center="22,22" RadiusX="7.25" RadiusY="7.25" />
+          <EllipseGeometry Center="21.5,21.5" RadiusX="8.75" RadiusY="8.75" />
         </CombinedGeometry.Geometry2>
       </CombinedGeometry>
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
-  <GeometryDrawing Brush="{{detail}}" Geometry="M12,10 L22,10 L22,12 L12,12 Z M12,14 L17,14 L17,16 L12,16 Z" />
+  <GeometryDrawing Brush="{{detail}}" Geometry="M11,7 L23,7 L23,9.5 L11,9.5 Z M11,12 L17,12 L17,14.5 L11,14.5 Z" />
   <GeometryDrawing Brush="{{glass}}">
     <GeometryDrawing.Geometry>
-      <EllipseGeometry Center="22,22" RadiusX="3.5" RadiusY="3.5" />
+      <EllipseGeometry Center="21.5,21.5" RadiusX="4.25" RadiusY="4.25" />
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
   <GeometryDrawing Brush="{{accent}}">
     <GeometryDrawing.Geometry>
       <CombinedGeometry GeometryCombineMode="Exclude">
         <CombinedGeometry.Geometry1>
-          <EllipseGeometry Center="22,22" RadiusX="5.75" RadiusY="5.75" />
+          <EllipseGeometry Center="21.5,21.5" RadiusX="7" RadiusY="7" />
         </CombinedGeometry.Geometry1>
         <CombinedGeometry.Geometry2>
-          <EllipseGeometry Center="22,22" RadiusX="3.5" RadiusY="3.5" />
+          <EllipseGeometry Center="21.5,21.5" RadiusX="4.25" RadiusY="4.25" />
         </CombinedGeometry.Geometry2>
       </CombinedGeometry>
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
-  <GeometryDrawing Brush="{{body}}" Geometry="M25.4,27.5 L27.5,25.4 L31.1,29 L29,31.1 Z" />
+  <GeometryDrawing Brush="{{body}}" Geometry="M27.23,24.97 L31.73,29.47 L29.47,31.73 L24.97,27.23 Z" />
 </DrawingGroup>

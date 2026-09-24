@@ -25,7 +25,7 @@ The WMP Custom Tools ribbon icons look low quality next to Inventor's own: satur
 - [ ] Resource names are `<assembly-prefix>.Ribbon.<icon>-<theme>-<size>.png` and each add-in embeds every variant it requests -> RibbonIconSelectorTests.cs and each project's ArchitectureTests
 - [ ] Analyze Naming and Apply Naming use different icons -> FileNamingManager.ArchitectureTests
 - [ ] All three add-ins convert ribbon icons through WmpRibbon.RibbonPicture (PICTYPE_ICON); the per-project AxHost converters are no longer used -> judgment: grep in review, plus live check
-- [ ] Live: on Inventor 2027 dark theme at 125% the four icons render in the new style without dark fringes -> judgment: user screenshot
+- [x] Live: on Inventor 2027 dark theme at 125% the four icons render in the new style without dark fringes -> judgment: user screenshot 2026-09-23 (before the resize; enlarged icons not re-screenshotted)
 - [ ] ./scripts/check.sh green in CI for the pushed SHA
 
 ## Plan
@@ -43,6 +43,8 @@ The WMP Custom Tools ribbon icons look low quality next to Inventor's own: satur
 - 2026-09-23 implemented: RibbonPicture (PICTYPE_ICON), RibbonIconSelector (31 unit tests), RibbonIcons loader, 8 XAML masters, WmpIconRenderer (56 PNGs, --check wired into check.sh as step 9a), three add-ins and windows rewired, architecture tests replaced with the variant contract (failed first on the missing UI resource, then passed).
 - 2026-09-23 local evidence: Debug and Release builds 0 warnings with the interop; build, WmpRibbon.UnitTests and icon --check also pass with -p:InventorInteropPath pointing at a missing file (CI shape); dotnet test 744 passed 0 failed; gitleaks dir no leaks. Not run locally: project check.sh packaging tests (need pwsh 7) and mutation; both run in CI.
 - 2026-09-23 docs: docs/rules/ribbon-icons.md (agent guide for new tools and icons), linked from the AGENTS.md rules index; WmpRibbon and WmpIconRenderer READMEs; BACKLOG rows for the release packaging guard (P0), archiving superseded icon sources, and live theme refresh.
+- 2026-09-23 live (dark theme, 125%): user screenshot showed all four commands loaded with the new icons, no dark fringes; user judged them "a little small". Measured content spans 20.5 to 25 of 32 units against Inventor's near-full-square icons.
+- 2026-09-23 resize: all eight masters redrawn to span 27 to 30.5 of 32 (14 to 16 of 16); WmpIconRenderer now rejects a master whose longer side is under 28/32 or shorter side under 26/32 (verified: the previous smart-export master fails, all new masters pass). Enlarged build installed; the user asked to commit without a second screenshot, so the enlarged icons are not yet re-checked live.
 
 ## Review verdict
 

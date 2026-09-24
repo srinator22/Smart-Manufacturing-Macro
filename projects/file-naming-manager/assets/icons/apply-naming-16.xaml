@@ -4,19 +4,19 @@
     <GeometryDrawing.Geometry>
       <CombinedGeometry GeometryCombineMode="Exclude">
         <CombinedGeometry.Geometry1>
-          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M4.5,3 L13,3 L13,11 L4.5,11 L1,7 Z">
+          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M4,1.5 L13.5,1.5 L13.5,10.5 L4,10.5 L0.5,6 Z">
             <CombinedGeometry.Geometry2>
-              <EllipseGeometry Center="4,7" RadiusX="1" RadiusY="1" />
+              <EllipseGeometry Center="3.5,6" RadiusX="1.1" RadiusY="1.1" />
             </CombinedGeometry.Geometry2>
           </CombinedGeometry>
         </CombinedGeometry.Geometry1>
         <CombinedGeometry.Geometry2>
-          <PathGeometry Figures="M6.9,11.9 L13.4,5.4 L16.6,8.6 L10.1,15.1 L5.6,16.4 Z" />
+          <PathGeometry Figures="M6.3,12.05 L13.37,4.98 L16.77,8.38 L9.7,15.45 L5.73,16.02 Z" />
         </CombinedGeometry.Geometry2>
       </CombinedGeometry>
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
-  <GeometryDrawing Brush="{{detail}}" Geometry="M6,5 L11,5 L11,6 L6,6 Z" />
-  <GeometryDrawing Brush="{{gold}}" Geometry="M7.62,12.62 L13.37,6.87 L15.13,8.63 L9.38,14.38 Z" />
-  <GeometryDrawing Brush="{{body}}" Geometry="M7.62,12.62 L9.38,14.38 L6.7,15.3 Z" />
+  <GeometryDrawing Brush="{{detail}}" Geometry="M5.75,4 L11,4 L11,5.25 L5.75,5.25 Z" />
+  <GeometryDrawing Brush="{{gold}}" Geometry="M6.87,12.62 L13.37,6.12 L15.63,8.38 L9.13,14.88 Z" />
+  <GeometryDrawing Brush="{{body}}" Geometry="M6.87,12.62 L9.13,14.88 L6.3,15.45 Z" />
 </DrawingGroup>

@@ -4,30 +4,35 @@
     <GeometryDrawing.Geometry>
       <CombinedGeometry GeometryCombineMode="Exclude">
         <CombinedGeometry.Geometry1>
-          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M4.5,3 L13,3 L13,11 L4.5,11 L1,7 Z">
+          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M4,1.5 L13.5,1.5 L13.5,10.5 L4,10.5 L0.5,6 Z">
             <CombinedGeometry.Geometry2>
-              <EllipseGeometry Center="4,7" RadiusX="1" RadiusY="1" />
+              <EllipseGeometry Center="3.5,6" RadiusX="1.1" RadiusY="1.1" />
             </CombinedGeometry.Geometry2>
           </CombinedGeometry>
         </CombinedGeometry.Geometry1>
         <CombinedGeometry.Geometry2>
-          <EllipseGeometry Center="11,11" RadiusX="4.25" RadiusY="4.25" />
+          <EllipseGeometry Center="11,11" RadiusX="4.75" RadiusY="4.75" />
         </CombinedGeometry.Geometry2>
       </CombinedGeometry>
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
-  <GeometryDrawing Brush="{{detail}}" Geometry="M6,5 L11,5 L11,6 L6,6 Z" />
+  <GeometryDrawing Brush="{{detail}}" Geometry="M5.75,4 L11,4 L11,5.25 L5.75,5.25 Z" />
+  <GeometryDrawing Brush="{{glass}}">
+    <GeometryDrawing.Geometry>
+      <EllipseGeometry Center="11,11" RadiusX="2.1" RadiusY="2.1" />
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
   <GeometryDrawing Brush="{{accent}}">
     <GeometryDrawing.Geometry>
       <CombinedGeometry GeometryCombineMode="Exclude">
         <CombinedGeometry.Geometry1>
-          <EllipseGeometry Center="11,11" RadiusX="3.25" RadiusY="3.25" />
+          <EllipseGeometry Center="11,11" RadiusX="3.75" RadiusY="3.75" />
         </CombinedGeometry.Geometry1>
         <CombinedGeometry.Geometry2>
-          <EllipseGeometry Center="11,11" RadiusX="1.75" RadiusY="1.75" />
+          <EllipseGeometry Center="11,11" RadiusX="2.1" RadiusY="2.1" />
         </CombinedGeometry.Geometry2>
       </CombinedGeometry>
     </GeometryDrawing.Geometry>
   </GeometryDrawing>
-  <GeometryDrawing Brush="{{body}}" Geometry="M12.9,14 L14,12.9 L16,14.9 L14.9,16 Z" />
+  <GeometryDrawing Brush="{{body}}" Geometry="M13.3,14.4 L14.4,13.3 L15.9,14.8 L14.8,15.9 Z" />
 </DrawingGroup>

@@ -55,6 +55,10 @@ palette change needs a preview of all icons in both themes.
   palette tokens (`Brush="{{accent}}"`); an unknown token fails the render.
 - Everything drawn must stay inside `0,0` to `16,16` or `0,0` to `32,32`; the renderer rejects a
   master whose drawing leaves its grid. Exclusion shapes may extend past it.
+- Fill the square. Inventor's own icons use nearly all of it, so the drawing's longer side must
+  span at least 28 of 32 units (14 of 16) and its shorter side at least 26 of 32 (13 of 16); the
+  renderer rejects anything smaller. The first WMP icons spanned only 20 to 25 units and looked
+  undersized on the ribbon. Aim for about 1 unit of margin on the longer side.
 - Keep straight edges on whole or half units, and keep features at least 2 units wide on the
   32-unit grid and 1 unit on the 16-unit grid; thinner details blur or vanish at 100%.
 - The 16-unit master is a simplification, not a scaled copy: drop the second text line, thin

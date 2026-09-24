@@ -16,7 +16,8 @@ proves in `scripts/check.sh` that the committed PNGs still match their masters.
 - `-- --preview <path>` writes a contact sheet of every icon at every size on the dark and light
   ribbon backgrounds, for review; keep it out of the repository.
 - A master with an unknown token, a missing 16- or 32-unit twin, a name that is not lowercase
-  kebab-case, a name used by two projects, or a drawing outside its grid fails with exit code 1.
+  kebab-case, a name used by two projects, a drawing outside its grid, or a drawing that fills
+  less than 28 by 26 of 32 units (14 by 13 of 16) fails with exit code 1.
 
 ## Assumptions
 

@@ -28,6 +28,8 @@ internal static partial class Program
 {
     private const int SmallGrid = 16;
     private const int LargeGrid = 32;
+    private const double MinimumLongerFill = 28.0 / 32.0;
+    private const double MinimumShorterFill = 26.0 / 32.0;
 
     private static readonly IReadOnlyList<int> RenderedSizes =
         [.. RibbonIconSelector.SmallSizes.Union(RibbonIconSelector.LargeSizes).Order()];
@@ -334,6 +336,17 @@ internal static partial class Program
                 throw new IconMasterException(string.Create(
                     CultureInfo.InvariantCulture,
                     $"{Relative(root, path)} draws at {bounds}, outside its 0,0 to {grid},{grid} grid"));
+            }
+
+            // Inventor's own ribbon icons use nearly the whole square; a drawing that leaves wide
+            // margins reads as undersized next to them (the first WMP icons spanned 20 to 25 of 32).
+            double longer = Math.Max(bounds.Width, bounds.Height);
+            double shorter = Math.Min(bounds.Width, bounds.Height);
+            if (longer < grid * MinimumLongerFill - Tolerance || shorter < grid * MinimumShorterFill - Tolerance)
+            {
+                throw new IconMasterException(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{Relative(root, path)} fills {bounds.Width:0.##} x {bounds.Height:0.##} of its {grid}-unit grid; the longer side must reach {grid * MinimumLongerFill:0.##} and the shorter side {grid * MinimumShorterFill:0.##}"));
             }
 
             drawing.Freeze();
