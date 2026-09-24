@@ -207,6 +207,16 @@ Write-Output "publish-release: Inventor interop found at $interopPath"
 # lacks the interop reference or StandardAddInServer before it writes a package.
 $buildArguments = @{ Version = $Version; DistRoot = $distRoot }
 if ($SkipBuild) { $buildArguments["SkipBuild"] = $true }
+if (-not $SkipBuild) {
+    # A fresh checkout of the tag has no obj/ or project.assets.json, and build-release.ps1 builds with
+    # --no-restore, so the locked restore has to happen here or the documented one-command publish fails
+    # before packaging on any machine that does not happen to hold compatible restore state.
+    Write-Output "publish-release: dotnet restore InventorScripts.sln --locked-mode"
+    & dotnet restore (Join-Path $repoRoot "InventorScripts.sln") --locked-mode
+    if ($LASTEXITCODE -ne 0) {
+        throw "publish-release: dotnet restore failed with exit code $LASTEXITCODE."
+    }
+}
 & $buildScript @buildArguments
 foreach ($asset in $assets) {
     if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
