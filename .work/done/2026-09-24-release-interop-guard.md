@@ -22,7 +22,7 @@ Make it impossible to publish an add-in that does not load. The v0.6.0 release a
 - [x] release.yml publishes no DLL assets: draft release with notes, --verify-tag, job-level contents: write only, prints the publish command. -> inspection, YAML parse, next tag run
 - [x] publish-release.ps1 fails closed (untagged HEAD, dirty tree, missing interop, missing draft release) and -WhatIf lists the uploads without touching GitHub. -> dry run recorded here
 - [x] test-release.sh stays green with the interop (real add-ins pass the guard) and without it (real build refused, installer cases run over a stub add-in built in the temp folder). -> local run with the interop; CI run for the pushed SHA
-- [x] ADR-0005 amendment, ship.md step 8, BACKLOG row removed, release-and-updater archived retro corrected, pending lesson proposed. -> inspection, reviewer PASS
+- [x] ADR-0005 amendment, ship.md step 8, the P0 guard row closed and replaced in BACKLOG by the open P0 row to repair or supersede the published v0.6.0 assets, release-and-updater archived retro corrected, pending lesson proposed. -> inspection, reviewer PASS
 - [x] Review PASS, gate green, PR CI and main CI green. -> reviewer round 2 PASS (should-fix and nit fixed in 5eacf4a); local scripts/check.sh check: OK on 2026-09-24 for b50633a (build-release-test 11 cases incl. guard refusal and acceptance under pwsh and powershell.exe, publish-release-test 11 cases incl. the real-build success path, release-test OK with the interop present, no leaks, mutation skipped - no C# change); PR #21 CI success for b50633a79975adf6ba3512d48881e68f2dad44dd; merged as cf514554a8e36178632c482adc0c5b1f603824a2; main CI success for that SHA
 
 ## Plan
