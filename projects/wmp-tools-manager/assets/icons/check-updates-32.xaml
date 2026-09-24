@@ -1,0 +1,10 @@
+<!-- Ribbon icon master on a 32-unit grid. Double-brace tokens are theme palette slots filled by shared/WmpIconRenderer. -->
+<DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <GeometryDrawing Geometry="M25.58,24.03 A12.5,12.5 0 1 1 26.83,9.75">
+    <GeometryDrawing.Pen>
+      <Pen Brush="{{body}}" Thickness="3.5" StartLineCap="Round" />
+    </GeometryDrawing.Pen>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{body}}" Geometry="M31.16,7.25 L22.5,12.25 L29.83,14.95 Z" />
+  <GeometryDrawing Brush="{{accent}}" Geometry="M14,7.5 L18,7.5 L18,15.5 L22.5,15.5 L16,23.5 L9.5,15.5 L14,15.5 Z" />
+</DrawingGroup>

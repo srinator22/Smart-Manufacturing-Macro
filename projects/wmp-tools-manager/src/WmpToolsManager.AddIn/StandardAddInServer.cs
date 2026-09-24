@@ -13,15 +13,11 @@
 //   docs/decisions/0005-release-distribution-and-updater.md.
 
 #if INVENTOR_INTEROP
-using System.Drawing;
-using System.IO;
 using System.Net.Http;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Inventor;
 using WmpRibbon;
 using WmpToolsManager.AddIn.Commands;
-using WmpToolsManager.AddIn.Interop;
 using WmpToolsManager.Infrastructure;
 
 namespace WmpToolsManager.AddIn;
@@ -46,8 +42,6 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     private ButtonDefinition? checkForUpdatesButtonDefinition;
     private ButtonDefinitionSink_OnExecuteEventHandler? onCheckForUpdatesExecuteHandler;
     private CheckForUpdatesCommand? checkForUpdatesCommand;
-    private Bitmap? standardIconBitmap;
-    private Bitmap? largeIconBitmap;
     private object? standardIcon;
     private object? largeIcon;
 
@@ -61,10 +55,7 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         httpClient = GitHubReleaseSource.CreateHttpClient();
         checkForUpdatesCommand = new(inventorApplication, UpdateComposition.Create(httpClient));
 
-        standardIconBitmap = LoadRibbonIcon("tools-manager-16.png");
-        largeIconBitmap = LoadRibbonIcon("tools-manager-32.png");
-        standardIcon = PictureDispConverter.ToPictureDisp(standardIconBitmap);
-        largeIcon = PictureDispConverter.ToPictureDisp(largeIconBitmap);
+        (standardIcon, largeIcon) = RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, "WmpToolsManager.AddIn", "check-updates");
 
         string tooltip = PluginDescriptor.DescribeCommand(CheckForUpdatesTooltip);
         checkForUpdatesButtonDefinition = inventorApplication.CommandManager.ControlDefinitions.AddButtonDefinition(
@@ -99,10 +90,6 @@ public sealed class StandardAddInServer : ApplicationAddInServer
         checkForUpdatesCommand = null;
         standardIcon = null;
         largeIcon = null;
-        standardIconBitmap?.Dispose();
-        standardIconBitmap = null;
-        largeIconBitmap?.Dispose();
-        largeIconBitmap = null;
         httpClient?.Dispose();
         httpClient = null;
         inventorApplication = null;
@@ -113,14 +100,5 @@ public sealed class StandardAddInServer : ApplicationAddInServer
     }
 
     private void OnCheckForUpdatesExecute(NameValueMap context) => checkForUpdatesCommand?.Execute();
-
-    private static Bitmap LoadRibbonIcon(string fileName)
-    {
-        string resourceName = $"WmpToolsManager.AddIn.Assets.{fileName}";
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded ribbon icon was not found: {resourceName}.");
-        using Bitmap decodedBitmap = new(stream);
-        return new Bitmap(decodedBitmap);
-    }
 }
 #endif

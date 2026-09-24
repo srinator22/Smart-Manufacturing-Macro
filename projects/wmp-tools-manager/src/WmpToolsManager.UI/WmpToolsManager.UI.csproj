@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\..\assets\tools-manager-32.png" Link="Assets\tools-manager-32.png" />
+    <Resource Include="..\..\assets\ribbon\check-updates-light-32.png" Link="Assets\check-updates-light-32.png" />
   </ItemGroup>
 
   <ItemGroup>

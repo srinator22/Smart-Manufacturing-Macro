@@ -4,6 +4,9 @@ Remaining work only. Priorities P0-P3 follow `docs/procedures/audit.md`.
 
 | Item | Priority | Reason | Status |
 | ---- | -------- | ------ | ------ |
+| Release packaging guard: fail `build-release.ps1` when an add-in DLL does not reference `Autodesk.Inventor.Interop`, and build releases on a machine with Inventor 2027 | P0 | The v0.6.0 release was built on a GitHub-hosted runner without Inventor, so `INVENTOR_INTEROP` was undefined and all three shipped add-in DLLs contain no `StandardAddInServer`; Inventor lists them as Automatic / Unloaded and no ribbon command appears. The packaging step checks only that each DLL exists | open |
+| Archive the superseded icon sources: each project's `<name>-16.png`, `<name>-32.png`, `<name>-logo.png`, `assets/generate-icons.ps1`, and `src/*.AddIn/Interop/PictureDispConverter.cs` | P3 | Replaced by the XAML masters, `shared/WmpIconRenderer`, and `WmpRibbon.RibbonIcons`; nothing references them, and kernel rule 11 allows removal only as a move to `.archive/` in a maintenance pass | open |
+| Refresh ribbon icons when the user changes Inventor's UI theme while it runs | P3 | Icons follow the theme read at activation; a theme switch shows the other theme's icons until Inventor restarts. `ButtonDefinition.StandardIcon`/`LargeIcon` are settable, so an application-option event could swap them | open |
 | Document and register each new Inventor automation under `projects/` | P0 | Preserves independent ownership and full-workspace verification | ongoing |
 | Inventor integration fixture: five unique parts, select three, export exactly three STEP files | P0 | Phase 1 acceptance test from the product specification | open |
 | STEP precision live acceptance: export a spline-bearing part with Low and Highest and compare import fidelity, time, and file size | P0 | Confirms Inventor 2027 honors the documented translator tolerance before release claims | open |

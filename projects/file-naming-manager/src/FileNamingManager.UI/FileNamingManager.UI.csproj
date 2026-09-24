@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\..\assets\file-naming-32.png" Link="Assets\file-naming-32.png" />
+    <Resource Include="..\..\assets\ribbon\analyze-naming-light-32.png" Link="Assets\analyze-naming-light-32.png" />
   </ItemGroup>
 
   <ItemGroup>

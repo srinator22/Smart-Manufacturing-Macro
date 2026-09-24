@@ -8,7 +8,7 @@
         MinHeight="480"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Icon="/WmpToolsManager.UI;component/Assets/tools-manager-32.png">
+        Icon="/WmpToolsManager.UI;component/Assets/check-updates-light-32.png">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </Window.Resources>

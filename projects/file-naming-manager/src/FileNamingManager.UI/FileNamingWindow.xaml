@@ -8,7 +8,7 @@
         MinHeight="480"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Icon="/FileNamingManager.UI;component/Assets/file-naming-32.png">
+        Icon="/FileNamingManager.UI;component/Assets/analyze-naming-light-32.png">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </Window.Resources>

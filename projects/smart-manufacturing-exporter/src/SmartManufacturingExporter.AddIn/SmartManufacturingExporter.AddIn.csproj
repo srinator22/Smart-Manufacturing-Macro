@@ -27,12 +27,9 @@
 
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
-    <EmbeddedResource Include="..\..\assets\smart-export-16.png"
-                      Link="Assets\smart-export-16.png"
-                      LogicalName="SmartManufacturingExporter.AddIn.Assets.smart-export-16.png" />
-    <EmbeddedResource Include="..\..\assets\smart-export-32.png"
-                      Link="Assets\smart-export-32.png"
-                      LogicalName="SmartManufacturingExporter.AddIn.Assets.smart-export-32.png" />
+    <EmbeddedResource Include="..\..\assets\ribbon\*.png"
+                      Link="Assets\Ribbon\%(Filename)%(Extension)"
+                      LogicalName="SmartManufacturingExporter.AddIn.Ribbon.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>

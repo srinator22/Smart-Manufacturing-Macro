@@ -1,0 +1,19 @@
+<!-- Ribbon icon master on a 32-unit grid. Double-brace tokens are theme palette slots filled by shared/WmpIconRenderer. -->
+<DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <GeometryDrawing Brush="{{accent}}">
+    <GeometryDrawing.Geometry>
+      <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M1,8 L11.5,2.75 L22,8 L11.5,13.25 Z" Geometry2="M15.5,14 L22,14 L22,6.2 L33.6,18 L22,29.8 L22,22 L15.5,22 Z" />
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{body}}">
+    <GeometryDrawing.Geometry>
+      <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M1,8 L11.5,13.25 L11.5,29.25 L1,24 Z" Geometry2="M15.5,14 L22,14 L22,6.2 L33.6,18 L22,29.8 L22,22 L15.5,22 Z" />
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{shade}}">
+    <GeometryDrawing.Geometry>
+      <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M11.5,13.25 L22,8 L22,24 L11.5,29.25 Z" Geometry2="M15.5,14 L22,14 L22,6.2 L33.6,18 L22,29.8 L22,22 L15.5,22 Z" />
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{gold}}" Geometry="M17,15.5 L23.5,15.5 L23.5,9.5 L31.5,18 L23.5,26.5 L23.5,20.5 L17,20.5 Z" />
+</DrawingGroup>

@@ -1,0 +1,38 @@
+<!-- Ribbon icon master on a 32-unit grid. Double-brace tokens are theme palette slots filled by shared/WmpIconRenderer. -->
+<DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <GeometryDrawing Brush="{{body}}">
+    <GeometryDrawing.Geometry>
+      <CombinedGeometry GeometryCombineMode="Exclude">
+        <CombinedGeometry.Geometry1>
+          <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M8,3 L27,3 L27,21 L8,21 L1,12 Z">
+            <CombinedGeometry.Geometry2>
+              <EllipseGeometry Center="7,12" RadiusX="2" RadiusY="2" />
+            </CombinedGeometry.Geometry2>
+          </CombinedGeometry>
+        </CombinedGeometry.Geometry1>
+        <CombinedGeometry.Geometry2>
+          <EllipseGeometry Center="21.5,21.5" RadiusX="8.75" RadiusY="8.75" />
+        </CombinedGeometry.Geometry2>
+      </CombinedGeometry>
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{detail}}" Geometry="M11,7 L23,7 L23,9.5 L11,9.5 Z M11,12 L17,12 L17,14.5 L11,14.5 Z" />
+  <GeometryDrawing Brush="{{glass}}">
+    <GeometryDrawing.Geometry>
+      <EllipseGeometry Center="21.5,21.5" RadiusX="4.25" RadiusY="4.25" />
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{accent}}">
+    <GeometryDrawing.Geometry>
+      <CombinedGeometry GeometryCombineMode="Exclude">
+        <CombinedGeometry.Geometry1>
+          <EllipseGeometry Center="21.5,21.5" RadiusX="7" RadiusY="7" />
+        </CombinedGeometry.Geometry1>
+        <CombinedGeometry.Geometry2>
+          <EllipseGeometry Center="21.5,21.5" RadiusX="4.25" RadiusY="4.25" />
+        </CombinedGeometry.Geometry2>
+      </CombinedGeometry>
+    </GeometryDrawing.Geometry>
+  </GeometryDrawing>
+  <GeometryDrawing Brush="{{body}}" Geometry="M27.23,24.97 L31.73,29.47 L29.47,31.73 L24.97,27.23 Z" />
+</DrawingGroup>

@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\..\assets\smart-export-32.png" Link="Assets\smart-export-32.png" />
+    <Resource Include="..\..\assets\ribbon\smart-export-light-32.png" Link="Assets\smart-export-light-32.png" />
   </ItemGroup>
 
   <!-- Lets the test assembly see internal members (SmartExportTreeNodeViewModel.AggregationCount) so

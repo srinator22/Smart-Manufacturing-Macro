@@ -76,6 +76,9 @@ for project_check in projects/*/scripts/check.sh; do
 done
 shopt -u nullglob
 
+# Step 9a: ribbon icon PNGs are generated from their XAML masters; re-render and compare every one.
+dotnet run --project shared/WmpIconRenderer -c Debug --no-build -- --check
+
 # Step 9b: release packaging contract (ADR-0005) - first the catalog validation against fixture
 # trees (duplicate ids, folders, manifests), then the real package installed into an isolated
 # Addins root, verifying digests, idempotence, rollback and the console-safe failure paths.

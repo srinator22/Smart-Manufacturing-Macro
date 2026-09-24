@@ -211,22 +211,42 @@ public sealed class ProjectBoundaryTests
     }
 
     [Fact]
-    public void VisualAssetsExistAndAreEmbeddedByTheirOwningHosts()
+    public void RibbonIconVariantsExistAndAreEmbeddedByTheirOwningHosts()
     {
+        // The add-in picks a theme and scale-specific PNG at activation (WmpRibbon.RibbonIcons), so every
+        // dark and light variant must exist and be embedded under the resource name the loader builds.
         string projectRoot = FindProjectRoot();
-        string assetsRoot = Path.Combine(projectRoot, "assets");
-
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "tools-manager-16.png")));
-        Assert.True(File.Exists(Path.Combine(assetsRoot, "tools-manager-32.png")));
+        string ribbonRoot = Path.Combine(projectRoot, "assets", "ribbon");
+        foreach (string icon in new[] { "check-updates" })
+        {
+            foreach (string theme in new[] { "dark", "light" })
+            {
+                foreach (int size in new[] { 16, 20, 24, 32, 40, 48, 64 })
+                {
+                    string png = Path.Combine(ribbonRoot, $"{icon}-{theme}-{size}.png");
+                    Assert.True(File.Exists(png), $"Missing rendered ribbon icon {png}; run dotnet run --project shared/WmpIconRenderer.");
+                }
+            }
+        }
 
         XDocument uiProject = XDocument.Load(Path.Combine(projectRoot, "src", "WmpToolsManager.UI", "WmpToolsManager.UI.csproj"));
         string[] uiResources = Includes(uiProject, "Resource");
-        Assert.Contains(@"..\..\assets\tools-manager-32.png", uiResources);
+        Assert.Contains(@"..\..\assets\ribbon\check-updates-light-32.png", uiResources);
+        string window = File.ReadAllText(Path.Combine(projectRoot, "src", "WmpToolsManager.UI", "UpdateWindow.xaml"));
+        Assert.Contains("Assets/check-updates-light-32.png", window, StringComparison.Ordinal);
 
         XDocument addInProject = XDocument.Load(Path.Combine(projectRoot, "src", AddInProjectName, $"{AddInProjectName}.csproj"));
-        string[] addInResources = Includes(addInProject, "EmbeddedResource");
-        Assert.Contains(@"..\..\assets\tools-manager-16.png", addInResources);
-        Assert.Contains(@"..\..\assets\tools-manager-32.png", addInResources);
+        XElement ribbonResources = addInProject
+            .Descendants("EmbeddedResource")
+            .Single(element => element.Attribute("Include")?.Value == @"..\..\assets\ribbon\*.png");
+        Assert.Equal("WmpToolsManager.AddIn.Ribbon.%(Filename)%(Extension)", ribbonResources.Attribute("LogicalName")?.Value);
+
+        string server = File.ReadAllText(Path.Combine(projectRoot, "src", AddInProjectName, "StandardAddInServer.cs"));
+        Assert.DoesNotContain("PictureDispConverter", server, StringComparison.Ordinal);
+        foreach (string icon in new[] { "check-updates" })
+        {
+            Assert.Contains($"RibbonIcons.Load(inventorApplication, typeof(StandardAddInServer).Assembly, \"WmpToolsManager.AddIn\", \"{icon}\")", server, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

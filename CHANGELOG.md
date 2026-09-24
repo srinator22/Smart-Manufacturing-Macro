@@ -7,6 +7,8 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 
 ### Added
 - Per-row include and exclude, one scope rule, tab re-ensured on every Activate
+- Theme- and scale-aware ribbon icons rendered from vector masters
+- Fill the icon grid and reject undersized masters
 
 ### Changed
 - Archive release-and-updater task
@@ -14,12 +16,15 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record the delta review and gates 3 and 4 for the follow-ups
 - Archive file-naming-followups task
 - State the escaped and human-reported defect routes in both archived retros
+- Ribbon icon guide for agents adding tools and icons
+- Record the gate and review verdicts for the ribbon icon restyle
 
 ### Fixed
 - Close the review findings on the follow-ups
 - Keep blocked rows selectable, validate stamp JSON, match only an explicit direct-to-main choice
 - Name a missing pwsh in the live evidence checker
 - Keep archived retros to durable memory and the backlog to remaining work
+- Close the review findings on the icon restyle
 ## [0.6.0] - 2026-09-22
 
 ### Added
