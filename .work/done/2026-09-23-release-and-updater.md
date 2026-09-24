@@ -51,7 +51,7 @@ Round 2 (2026-09-22T23:05Z, same reviewer): PASS - all seven findings verified f
 
 ## Retro
 
-Defects escaped past merge (route b): none. Defects reported by the human (route c): none yet; the first real install by a WMP user is the next signal.
+Defects escaped past merge (route b) and reported by the human (route c), corrected 2026-09-24: one. The v0.6.0 assets were built by the release workflow on a runner without the Inventor interop, so the three add-in DLLs shipped without StandardAddInServer and load as Unloaded; the human found it in Inventor on 2026-09-23. Regression check added before the fix in the release-interop-guard task (test-build-release.sh refuses an interop-less add-in; the previous packager accepted it); lesson proposed in docs/lessons/PENDING.md.
 
 Confirmed-good call worth a pending lesson (step 4, not yet human-validated, so not proposed): running an independent adversarial review before the first push caught a blocker (console closing on success) that 16 green test cases and the full gate could not see, because no test executed the success path under Invoke-Expression. The gate now has that test.
 
