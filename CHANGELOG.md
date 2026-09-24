@@ -20,6 +20,10 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Record the gate and review verdicts for the ribbon icon restyle
 - Archive ribbon icon restyle task
 - Keep the enlarged-icon live check in the backlog
+- Record the escaped v0.6.0 defect and propose its lesson
+- Open the release-interop-guard task record
+- Record the round 2 review of the interop guard
+- Cover the missing draft release refusal and the publish success path
 
 ### Fixed
 - Close the review findings on the follow-ups
@@ -27,6 +31,9 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Name a missing pwsh in the live evidence checker
 - Keep archived retros to durable memory and the backlog to remaining work
 - Close the review findings on the icon restyle
+- Refuse add-ins built without the Inventor interop and publish assets from an Inventor machine
+- Fail closed in publish-release.ps1 and exercise every refusal
+- Restore the tagged checkout before the publish build
 ## [0.6.0] - 2026-09-22
 
 ### Added

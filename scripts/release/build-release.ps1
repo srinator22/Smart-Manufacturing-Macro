@@ -11,6 +11,10 @@
 # Assumptions: The .addin manifest carries the absolute assembly path, and Inventor does not expand
 #   environment variables inside it, so the manifest cannot be written at package time. The template is
 #   shipped verbatim and the installer substitutes the real per-user path it just wrote to.
+#   Every add-in project defines INVENTOR_INTEROP only when Autodesk.Inventor.Interop.dll exists at
+#   build time; without it the add-in entry point compiles out and the DLL still builds. v0.6.0 shipped
+#   exactly that from a runner without Inventor, so each add-in assembly is refused unless its metadata
+#   references Autodesk.Inventor.Interop and defines StandardAddInServer (ADR-0005, 2026-09-24 amendment).
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -76,6 +80,62 @@ function Test-PathSegment {
     if ($Value -ne [System.IO.Path]::GetFileName($Value)) { return $false }
 
     return $true
+}
+
+function Get-AddInAssemblyFacts {
+    # Reads the two facts that prove the add-in was compiled with the Inventor interop: an assembly
+    # reference to Autodesk.Inventor.Interop and a type definition named StandardAddInServer. Both are
+    # read from ECMA-335 metadata, never inferred from file size or name. PowerShell 7 always carries
+    # System.Reflection.Metadata; Windows PowerShell 5.1 may not, so there the metadata #Strings heap
+    # is scanned for the NUL-delimited UTF-8 names instead, which is where both names live.
+    param([string]$Path)
+
+    $referencesInterop = $false
+    $definesServer = $false
+    $metadataReaderType = 'System.Reflection.Metadata.MetadataReader' -as [type]
+
+    if ($null -ne $metadataReaderType) {
+        $method = "System.Reflection.Metadata"
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            $peReader = [System.Reflection.PortableExecutable.PEReader]::new($stream)
+            try {
+                if (-not $peReader.HasMetadata) {
+                    throw "'$Path' has no .NET metadata; it is not a managed add-in assembly."
+                }
+                $reader = [System.Reflection.Metadata.PEReaderExtensions]::GetMetadataReader($peReader)
+                foreach ($handle in $reader.AssemblyReferences) {
+                    if ($reader.GetString($reader.GetAssemblyReference($handle).Name) -ceq "Autodesk.Inventor.Interop") {
+                        $referencesInterop = $true
+                    }
+                }
+                foreach ($handle in $reader.TypeDefinitions) {
+                    if ($reader.GetString($reader.GetTypeDefinition($handle).Name) -ceq "StandardAddInServer") {
+                        $definesServer = $true
+                    }
+                }
+            }
+            finally {
+                $peReader.Dispose()
+            }
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    else {
+        $method = "metadata byte scan (System.Reflection.Metadata is not loadable in this PowerShell)"
+        $text = [System.Text.Encoding]::GetEncoding(28591).GetString([System.IO.File]::ReadAllBytes($Path))
+        $nul = [string][char]0
+        $referencesInterop = $text.Contains($nul + "Autodesk.Inventor.Interop" + $nul)
+        $definesServer = $text.Contains($nul + "StandardAddInServer" + $nul)
+    }
+
+    return [pscustomobject]@{
+        ReferencesInterop = $referencesInterop
+        DefinesServer     = $definesServer
+        Method            = $method
+    }
 }
 
 $versionPrefix = Get-VersionPrefix -PropsPath (Join-Path $repoRoot "Directory.Build.props")
@@ -188,6 +248,33 @@ if (-not $SkipBuild) {
     }
 }
 
+# Interop guard. Runs over every add-in before anything under dist/ is removed or written, so a refused
+# package leaves the previous stage untouched and never produces a zip or SHA256SUMS.txt. The staged
+# copy is a byte copy of this file, so checking the source proves what ships.
+$interopFailures = @()
+foreach ($plugin in $plugins) {
+    $sourceAssembly = Join-Path $plugin.OutputDirectory $plugin.Definition.assembly
+    if (-not (Test-Path -LiteralPath $sourceAssembly -PathType Leaf)) {
+        throw "Release output '$sourceAssembly' is missing; build the solution in Release first."
+    }
+
+    $facts = Get-AddInAssemblyFacts -Path $sourceAssembly
+    $missing = @()
+    if (-not $facts.ReferencesInterop) { $missing += "has no assembly reference to Autodesk.Inventor.Interop" }
+    if (-not $facts.DefinesServer) { $missing += "defines no StandardAddInServer type" }
+    if ($missing.Count -gt 0) {
+        $interopFailures += "  $sourceAssembly ($($plugin.Definition.id)): $($missing -join ' and ') [checked by $($facts.Method)]"
+    }
+    else {
+        Write-Output "build-release: interop guard OK for $($plugin.Definition.id) (references Autodesk.Inventor.Interop, defines StandardAddInServer) [checked by $($facts.Method)]"
+    }
+}
+if ($interopFailures.Count -gt 0) {
+    throw ("Refusing to package: the build ran without the Inventor interop (Autodesk.Inventor.Interop.dll was absent, so INVENTOR_INTEROP was undefined and the add-in entry point compiled out). Inventor would list these add-ins as Unloaded with no ribbon command:`n" +
+        ($interopFailures -join "`n") +
+        "`nBuild and package on a machine with Inventor 2027 installed; see docs/procedures/ship.md step 8.")
+}
+
 if (Test-Path -LiteralPath $stageRoot) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
 }
@@ -198,10 +285,6 @@ New-Item -ItemType Directory -Path $templateStage -Force | Out-Null
 $catalogPlugins = @()
 foreach ($plugin in $plugins) {
     $definition = $plugin.Definition
-    $sourceAssembly = Join-Path $plugin.OutputDirectory $definition.assembly
-    if (-not (Test-Path -LiteralPath $sourceAssembly -PathType Leaf)) {
-        throw "Release output '$sourceAssembly' is missing; build the solution in Release first."
-    }
 
     $pluginStage = Join-Path $stageRoot $definition.installDirectory
     New-Item -ItemType Directory -Path $pluginStage -Force | Out-Null

@@ -9,6 +9,11 @@
 #   project that the release forgets to package fails this test instead of shipping missing.
 # Outputs: "release-package: OK" on success; a non-zero exit and a named failure otherwise.
 # Dependencies: bash, PowerShell 7 (pwsh), the .NET SDK, sha256sum, unzip, cygpath.
+#   The package is also the positive case of build-release.ps1's interop guard: on a machine with
+#   Inventor 2027 the real Release output must pass it. On a machine without the interop (a hosted CI
+#   runner) the real Release output must be REFUSED instead, and the installer is then exercised
+#   against a package built from the real catalogs over a stub add-in that carries the two metadata
+#   facts the guard reads; the installer never loads the add-in DLLs, so its behavior is the same.
 # Assumptions: Inventor is not running; the installer refuses to touch add-in files while it is.
 set -euo pipefail
 
@@ -211,11 +216,87 @@ echo "release-test: building Release once"
 dotnet restore InventorScripts.sln --locked-mode >/dev/null
 dotnet build InventorScripts.sln -c Release --no-restore >/dev/null
 
-echo "release-test: packaging $VERSION"
-pwsh -NoProfile -File scripts/release/build-release.ps1 -Version "$VERSION" -SkipBuild >/dev/null
+# Mirrors how every add-in csproj evaluates InventorInteropPath: MSBuild takes an environment variable
+# of that name as the property, and otherwise the csproj default under Program Files applies.
+if [[ -n "${InventorInteropPath:-}" ]]; then
+  INTEROP_DLL="$(cygpath -u "$InventorInteropPath")"
+else
+  INTEROP_DLL="$(cygpath -u "${PROGRAMFILES:-C:/Program Files}")/Autodesk/Inventor 2027/Bin/Public Assemblies/Autodesk.Inventor.Interop.dll"
+fi
 
-ZIP="dist/WmpInventorTools-$VERSION.zip"
-SUMS="dist/SHA256SUMS.txt"
+if [[ -f "$INTEROP_DLL" ]]; then
+  echo "release-test: packaging $VERSION (Inventor interop present: the real add-ins must pass the interop guard)"
+  pwsh -NoProfile -File scripts/release/build-release.ps1 -Version "$VERSION" -SkipBuild >/dev/null \
+    || fail "build-release.ps1 refused the real Release output on a machine with the Inventor interop"
+  DIST="$ROOT/dist"
+else
+  echo "release-test: Inventor interop absent at '$INTEROP_DLL'; the real add-ins must be refused"
+  set +e
+  refuse_output="$(pwsh -NoProfile -File scripts/release/build-release.ps1 -Version "$VERSION" -SkipBuild \
+    -DistRoot "$(cygpath -w "$TEST_ROOT/refused-dist")" 2>&1)"
+  refuse_rc=$?
+  set -e
+  [[ "$refuse_rc" -ne 0 ]] || fail "build-release.ps1 packaged add-ins built without the Inventor interop"
+  grep -q "without the Inventor interop" <<<"$refuse_output" \
+    || fail "build-release.ps1 failed without the interop, but not on the interop guard: $refuse_output"
+  [[ ! -e "$TEST_ROOT/refused-dist/WmpInventorTools-$VERSION.zip" ]] \
+    || fail "the refused package still produced a zip"
+  echo "release-test: interop guard refused the interop-less Release output OK"
+
+  # A stub interop assembly and a stub add-in that references it and defines StandardAddInServer:
+  # the smallest input the guard accepts, built outside the repository so no repo props apply.
+  STUB="$TEST_ROOT/stub-addin"
+  mkdir -p "$STUB/interop" "$STUB/addin"
+  cat > "$STUB/interop/Autodesk.Inventor.Interop.csproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Autodesk.Inventor.Interop</AssemblyName>
+  </PropertyGroup>
+</Project>
+XML
+  echo 'namespace Inventor { public interface ApplicationAddInServer { } }' > "$STUB/interop/Stub.cs"
+  cat > "$STUB/addin/StubAddIn.csproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../interop/Autodesk.Inventor.Interop.csproj" />
+  </ItemGroup>
+</Project>
+XML
+  echo 'namespace StubAddIn { public sealed class StandardAddInServer : Inventor.ApplicationAddInServer { } }' \
+    > "$STUB/addin/StandardAddInServer.cs"
+  dotnet build "$(cygpath -w "$STUB/addin/StubAddIn.csproj")" -c Release -o "$(cygpath -w "$STUB/out")" >/dev/null \
+    || fail "could not build the stub add-in"
+
+  # The fixture tree carries every real plugin.json and template at its real relative path, so the
+  # catalog, manifests and ClassIds under test are the working tree's own; only the DLL is a stub.
+  STUB_PROJECTS="$TEST_ROOT/stub-projects"
+  for catalog in "$ROOT"/projects/*/plugin.json; do
+    project_name="$(basename "$(dirname "$catalog")")"
+    fields="$(pwsh -NoProfile -Command "\$d = Get-Content -Raw -LiteralPath '$(cygpath -w "$catalog")' | ConvertFrom-Json; \$d.addinProject; \$d.addinTemplate; \$d.assembly" | tr -d '\r')"
+    addin_project="$(sed -n 1p <<<"$fields")"
+    addin_template="$(sed -n 2p <<<"$fields")"
+    assembly="$(sed -n 3p <<<"$fields")"
+    fixture="$STUB_PROJECTS/$project_name"
+    mkdir -p "$fixture/$(dirname "$addin_project")/bin/Release/net10.0-windows" "$fixture/$(dirname "$addin_template")"
+    cp "$catalog" "$fixture/plugin.json"
+    cp "$ROOT/projects/$project_name/$addin_template" "$fixture/$addin_template"
+    : > "$fixture/$addin_project"
+    cp "$STUB/out/StubAddIn.dll" "$fixture/$(dirname "$addin_project")/bin/Release/net10.0-windows/$assembly"
+  done
+
+  DIST="$TEST_ROOT/dist"
+  echo "release-test: packaging $VERSION from the real catalogs over the stub add-in"
+  pwsh -NoProfile -File scripts/release/build-release.ps1 -Version "$VERSION" -SkipBuild \
+    -ProjectsRoot "$(cygpath -w "$STUB_PROJECTS")" -DistRoot "$(cygpath -w "$DIST")" >/dev/null \
+    || fail "build-release.ps1 refused the stub add-in that carries the interop reference and StandardAddInServer"
+fi
+
+ZIP="$DIST/WmpInventorTools-$VERSION.zip"
+SUMS="$DIST/SHA256SUMS.txt"
 [[ -f "$ZIP" ]] || fail "$ZIP was not produced"
 [[ -f "$SUMS" ]] || fail "$SUMS was not produced"
 
@@ -254,7 +335,7 @@ done <<<"$PLUGIN_ROWS"
 echo "release-test: package contents OK ($PLUGIN_COUNT plugins packaged)"
 
 # --- digests -----------------------------------------------------------------
-( cd dist && sha256sum --check --quiet <(sed "s#  Install-WmpInventorTools.ps1#  WmpInventorTools-$VERSION/Install-WmpInventorTools.ps1#" SHA256SUMS.txt) ) \
+( cd "$DIST" && sha256sum --check --quiet <(sed "s#  Install-WmpInventorTools.ps1#  WmpInventorTools-$VERSION/Install-WmpInventorTools.ps1#" SHA256SUMS.txt) ) \
   || fail "SHA256SUMS.txt does not match the produced artifacts"
 echo "release-test: SHA256SUMS OK"
 
@@ -292,8 +373,8 @@ STATE="$TEST_ROOT/state"
 mkdir -p "$ADDINS" "$STATE"
 ADDINS_W="$(cygpath -w "$ADDINS")"
 STATE_W="$(cygpath -w "$STATE")"
-ZIP_W="$(cygpath -w "$ROOT/$ZIP")"
-SUMS_W="$(cygpath -w "$ROOT/$SUMS")"
+ZIP_W="$(cygpath -w "$ZIP")"
+SUMS_W="$(cygpath -w "$SUMS")"
 
 pwsh -NoProfile -File "$INSTALLER" \
   -ZipPath "$ZIP_W" -Sha256SumsPath "$SUMS_W" \
@@ -534,7 +615,7 @@ echo "release-test: in-memory rollback (session survives) OK"
 BROKEN_DIR="$(tail -n1 <<<"$PLUGIN_ROWS" | cut -f2)"
 [[ -n "$BROKEN_DIR" ]] || fail "could not determine a plugin folder to drop from the broken package"
 BROKEN_STAGE="$TEST_ROOT/broken-stage"
-cp -r "$ROOT/dist/WmpInventorTools-$VERSION" "$BROKEN_STAGE"
+cp -r "$DIST/WmpInventorTools-$VERSION" "$BROKEN_STAGE"
 [[ -d "$BROKEN_STAGE/$BROKEN_DIR" ]] || fail "the staged package has no $BROKEN_DIR folder to drop"
 rm -rf "${BROKEN_STAGE:?}/${BROKEN_DIR:?}"
 
@@ -588,7 +669,7 @@ echo "release-test: part-way failure over an existing install points at -Rollbac
 # would copy, and later archive, outside the Inventor Addins root, so the installer validates every
 # catalog path segment itself before the Addins root is touched.
 ESCAPE_STAGE="$TEST_ROOT/escape-stage"
-cp -r "$ROOT/dist/WmpInventorTools-$VERSION" "$ESCAPE_STAGE"
+cp -r "$DIST/WmpInventorTools-$VERSION" "$ESCAPE_STAGE"
 ps_run set-catalog-install-directory.ps1 \
   -CatalogPath "$(cygpath -w "$ESCAPE_STAGE/catalog.json")" -InstallDirectory '..\Escape' \
   || fail "could not rewrite the catalog of the escaping package"
@@ -638,7 +719,7 @@ echo "release-test: escaping catalog refused before the add-ins root is touched 
 # it would read an arbitrary file into a manifest. The installer derives the path from the validated
 # id instead and treats any other value as a malformed catalog, before the Addins root is touched.
 TEMPLATE_STAGE="$TEST_ROOT/template-stage"
-cp -r "$ROOT/dist/WmpInventorTools-$VERSION" "$TEMPLATE_STAGE"
+cp -r "$DIST/WmpInventorTools-$VERSION" "$TEMPLATE_STAGE"
 ps_run set-catalog-addin-template.ps1 \
   -CatalogPath "$(cygpath -w "$TEMPLATE_STAGE/catalog.json")" -AddinTemplate '../../outside.addin.template' \
   || fail "could not rewrite the catalog of the template-escape package"

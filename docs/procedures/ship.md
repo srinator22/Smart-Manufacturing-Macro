@@ -24,16 +24,33 @@ SHA is terminal-success (kernel rule 5).
    required check for the exact SHA is terminal-success. On failure:
    inspect logs, fix the root cause, verify locally, push the replacement,
    monitor the replacement SHA.
-8. Release, when a coherent wave ships: releases are produced by
-   `.github/workflows/release.yml`, not by hand. The human creates the
-   annotated tag `vX.Y.Z` on the merged SHA and pushes it; the workflow
-   refuses any tag whose version does not equal `Directory.Build.props`
-   VersionPrefix, runs the full gate, packages every `projects/*/plugin.json`
-   plugin, and calls `gh release create` with notes built from the
-   CHANGELOG section plus a plugins-and-maturity table. Assets published:
-   `WmpInventorTools-<version>.zip`, `SHA256SUMS.txt`, and
-   `Install-WmpInventorTools.ps1`. Watch the release run to terminal state
-   like any other push (step 7); a tag alone is not a release.
+8. Release, when a coherent wave ships (ADR-0005 and its 2026-09-24
+   amendment): CI cannot build working add-ins, because the Inventor
+   interop exists only where Inventor 2027 is installed.
+   a. Tag: the human creates the annotated tag `vX.Y.Z` on the merged SHA
+      and pushes it.
+   b. Workflow drafts: `.github/workflows/release.yml` refuses any tag
+      whose version does not equal `Directory.Build.props` VersionPrefix,
+      runs the full gate, and creates a DRAFT release with notes built from
+      the CHANGELOG section plus a plugins-and-maturity table, and no
+      assets. Watch the run to terminal state like any other push (step 7).
+   c. Publish: on a machine with Inventor 2027, at the tag with a clean
+      tree, run `pwsh -File scripts/release/publish-release.ps1 -Version
+      X.Y.Z` (the workflow prints this command). It builds, runs the
+      interop guard, uploads `WmpInventorTools-<version>.zip`,
+      `SHA256SUMS.txt`, and `Install-WmpInventorTools.ps1`, and publishes
+      the draft. `-DryRun` (or `-WhatIf`) stops after the guard without
+      touching GitHub. `-AllowUntagged` and `-SkipBuild` are dry-run only;
+      a real run with either stops before building.
+   c2. Repair: a release that is already published is refused. To replace
+      the assets of a broken published release, run the same command from
+      the tag with a clean tree plus `-ReplacePublishedAssets`; it prints
+      the asset names it will overwrite and the digests in the currently
+      published `SHA256SUMS.txt` before it builds and uploads. The
+      alternative is superseding it with the next patch release.
+   d. Watch: confirm `gh release view vX.Y.Z --json isDraft,assets` shows
+      `isDraft: false` and all three assets. A tag or a draft alone is not
+      a release.
    Template-repo releases (before start runs) still use annotated
    `template-vX.Y.Z` tags and are cut by hand.
 9. Final handoff format: Outcome / Evidence (commands and terminal results)

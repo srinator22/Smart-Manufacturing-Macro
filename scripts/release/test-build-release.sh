@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
 # test-build-release.sh - Asserts build-release.ps1 rejects a catalog set with a duplicate id,
 #   installDirectory, or derived manifest name, and rejects an invalid id, before any build or
-#   staging happens; and that two clean, distinct catalogs clear validation.
+#   staging happens; that two clean, distinct catalogs clear validation; and that an add-in built
+#   without the Inventor interop is refused before anything is staged.
 #
 # Purpose: Prove the catalog-uniqueness gate in build-release.ps1 fires for each of the three
 #   collision fields plus the id format, names both offending catalog files (and, for the id
-#   format check, the offending catalog), and never touches dist/ while rejecting. A fifth,
-#   positive case proves two distinct catalogs pass validation by reaching the later
-#   "Release output ... is missing" check instead of a validation error.
+#   format check, the offending catalog), and never touches dist/ while rejecting. The cases, in
+#   order: duplicate id, duplicate installDirectory, duplicate manifest name, invalid id, an
+#   installDirectory that escapes the stage root, a dotted manifest name (all rejected with no
+#   dist write); two distinct catalogs that pass validation by reaching the later "Release output
+#   ... is missing" check instead of a validation error; an add-in built without the Inventor
+#   interop, refused under both PowerShell 7 and Windows PowerShell 5.1; and a real interop-built
+#   add-in accepted under both.
 # Inputs: the working tree; run from anywhere, the script resolves the repository root itself.
 # Outputs: "build-release-test: OK" on success; a non-zero exit and a named failure otherwise.
-# Dependencies: bash, PowerShell 7 (pwsh), cygpath.
+#   The interop-guard case compiles one real add-in project with InventorInteropPath pointed at a
+#   file that does not exist, which is exactly the shape a runner without Inventor produced for
+#   v0.6.0, and asserts the packager names that DLL and the missing interop. The guard reads
+#   metadata with System.Reflection.Metadata under pwsh and falls back to a byte scan of the
+#   metadata strings under powershell.exe (5.1), so the refusal and the positive case run under
+#   both and assert which method each one reported; otherwise the 5.1 branch would never run.
+#   The positive case needs a DLL built with the interop, so it runs only where Inventor 2027 is
+#   installed and says so when it is skipped.
+# Dependencies: bash, PowerShell 7 (pwsh), Windows PowerShell 5.1 (powershell.exe), cygpath, the
+#   .NET SDK.
 # Assumptions: build-release.ps1 accepts -ProjectsRoot and -DistRoot, so fixtures never sit under
 #   projects/ and nothing is written under the repo's dist/.
 set -euo pipefail
@@ -22,7 +36,9 @@ fail() { echo "BUILD-RELEASE TEST FAILED: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || fail "$1 is required but was not found on PATH"; }
 
 need pwsh
+need powershell.exe
 need cygpath
+need dotnet
 
 VERSION="$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props | head -n1)"
 [[ -n "$VERSION" ]] || fail "could not read VersionPrefix from Directory.Build.props"
@@ -72,19 +88,28 @@ create_project() {
 JSON
 }
 
-# run_case FIXTURE_PROJECTS_DIR - invokes the real script with -ProjectsRoot pointed at the
-# fixture; sets CASE_OUTPUT and CASE_RC rather than letting `set -e` abort on the expected
-# non-zero exit.
+# run_case FIXTURE_PROJECTS_DIR [SHELL [DIST_ROOT]] - invokes the real script with -ProjectsRoot
+# pointed at the fixture, under pwsh unless SHELL names another PowerShell (powershell.exe), and
+# packaging into DIST_ROOT (default $DIST_ROOT); sets CASE_OUTPUT and CASE_RC rather than letting
+# `set -e` abort on the expected non-zero exit.
 run_case() {
-  local fixture_dir="$1"
+  local fixture_dir="$1" shell="${2:-pwsh}" dist_root="${3:-$DIST_ROOT}"
   local fixture_w
   fixture_w="$(cygpath -w "$fixture_dir")"
+  # Windows PowerShell's default policy (Restricted) refuses any -File script; the per-invocation
+  # override is the same one scripts/check.cmd and the Tools Manager apply command use.
+  local policy=()
+  [[ "$shell" == "powershell.exe" ]] && policy=(-ExecutionPolicy Bypass)
   set +e
-  CASE_OUTPUT="$(pwsh -NoProfile -File scripts/release/build-release.ps1 \
-    -Version "$VERSION" -SkipBuild -ProjectsRoot "$fixture_w" -DistRoot "$(cygpath -w "$DIST_ROOT")" 2>&1)"
+  CASE_OUTPUT="$("$shell" -NoProfile "${policy[@]}" -File scripts/release/build-release.ps1 \
+    -Version "$VERSION" -SkipBuild -ProjectsRoot "$fixture_w" -DistRoot "$(cygpath -w "$dist_root")" 2>&1)"
   CASE_RC=$?
   set -e
 }
+
+# The method names build-release.ps1 reports in "[checked by ...]"; each shell must report its own.
+METHOD_PWSH="[checked by System.Reflection.Metadata]"
+METHOD_WINPS="[checked by metadata byte scan"
 
 # --- duplicate id --------------------------------------------------------------
 DUP_ID_ROOT="$WORK_ROOT/dup-id"
@@ -173,5 +198,91 @@ run_case "$VALID_ROOT"
 grep -q "Release output" <<<"$CASE_OUTPUT" && grep -q "is missing" <<<"$CASE_OUTPUT" \
   || fail "the valid fixture pair failed before the Release-output check, so validation was not proven: $CASE_OUTPUT"
 echo "build-release-test: distinct catalogs pass validation OK"
+
+# --- an add-in compiled without the Inventor interop is refused ----------------------
+# Every add-in csproj defines INVENTOR_INTEROP only when Autodesk.Inventor.Interop.dll exists, so a
+# build without it still succeeds and yields a DLL with no StandardAddInServer and no interop
+# reference. The custom configuration keeps this build's bin/ and obj/ apart from Debug and Release,
+# so the interop-less intermediates never feed a real package.
+GUARD_PROJECT="projects/wmp-tools-manager/src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj"
+GUARD_PLUGIN_DIR="projects/wmp-tools-manager"
+GUARD_ASSEMBLY="WmpToolsManager.AddIn.dll"
+GUARD_BUILD_OUT="$WORK_ROOT/no-interop-build"
+[[ -f "$GUARD_PROJECT" ]] || fail "the interop-guard case expects $GUARD_PROJECT"
+dotnet restore "$GUARD_PROJECT" --locked-mode >/dev/null \
+  || fail "could not restore $GUARD_PROJECT for the interop-guard case"
+dotnet build "$GUARD_PROJECT" -c GuardFixture --no-restore \
+  "-p:InventorInteropPath=$(cygpath -w "$WORK_ROOT/definitely-missing/Autodesk.Inventor.Interop.dll")" \
+  -o "$(cygpath -w "$GUARD_BUILD_OUT")" >/dev/null \
+  || fail "could not build $GUARD_PROJECT without the Inventor interop"
+[[ -f "$GUARD_BUILD_OUT/$GUARD_ASSEMBLY" ]] || fail "the interop-less build did not produce $GUARD_ASSEMBLY"
+
+# The fixture mirrors the real plugin's layout: its own plugin.json and template, a placeholder
+# csproj, and the interop-less DLL where build-release.ps1 looks for Release output.
+GUARD_ROOT="$WORK_ROOT/no-interop"
+GUARD_FIXTURE="$GUARD_ROOT/wmp-tools-manager"
+GUARD_OUTPUT_DIR="$GUARD_FIXTURE/src/WmpToolsManager.AddIn/bin/Release/net10.0-windows"
+mkdir -p "$GUARD_FIXTURE/packaging" "$GUARD_OUTPUT_DIR"
+cp "$GUARD_PLUGIN_DIR/plugin.json" "$GUARD_FIXTURE/plugin.json"
+cp "$GUARD_PLUGIN_DIR/packaging/Autodesk.WmpToolsManager.Inventor.addin.template" "$GUARD_FIXTURE/packaging/"
+: > "$GUARD_FIXTURE/src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj"
+cp "$GUARD_BUILD_OUT/$GUARD_ASSEMBLY" "$GUARD_OUTPUT_DIR/"
+
+# Both PowerShells must refuse it, each through its own metadata reader.
+for shell in pwsh powershell.exe; do
+  if [[ "$shell" == "pwsh" ]]; then method="$METHOD_PWSH"; else method="$METHOD_WINPS"; fi
+  run_case "$GUARD_ROOT" "$shell"
+  [[ "$CASE_RC" -ne 0 ]] || fail "$shell packaged an add-in built without the Inventor interop (exit 0); expected a refusal"
+  grep -q "$GUARD_ASSEMBLY" <<<"$CASE_OUTPUT" || fail "the $shell interop refusal did not name $GUARD_ASSEMBLY: $CASE_OUTPUT"
+  grep -q "without the Inventor interop" <<<"$CASE_OUTPUT" || fail "the $shell interop refusal did not say the build ran without the Inventor interop: $CASE_OUTPUT"
+  grep -q "Autodesk.Inventor.Interop" <<<"$CASE_OUTPUT" || fail "the $shell interop refusal did not name the missing reference: $CASE_OUTPUT"
+  grep -q "StandardAddInServer" <<<"$CASE_OUTPUT" || fail "the $shell interop refusal did not name the missing entry point: $CASE_OUTPUT"
+  grep -qF -- "$method" <<<"$CASE_OUTPUT" || fail "the $shell interop refusal did not report '$method': $CASE_OUTPUT"
+  dist_stage_exists && fail "the $shell interop-less case wrote '$DIST_STAGE'" || true
+  [[ ! -e "$DIST_ROOT/WmpInventorTools-$VERSION.zip" ]] || fail "the $shell interop-less case produced a zip"
+  echo "build-release-test: $shell refused the add-in built without the Inventor interop (reported \"$method\"), no dist write OK"
+done
+
+# --- a real interop-built add-in passes the guard under both PowerShells -------------------
+# Proves neither metadata reader refuses a good add-in. It needs a DLL compiled with the interop,
+# which exists only where Inventor 2027 is installed; the Release output of the gate's earlier
+# steps is reused when present, otherwise the one project is built in Release here.
+INTEROP_PRESENT="$(pwsh -NoProfile -Command \
+  'Test-Path -LiteralPath (Join-Path $env:ProgramFiles "Autodesk\Inventor 2027\Bin\Public Assemblies\Autodesk.Inventor.Interop.dll") -PathType Leaf' \
+  | tr -d '\r')"
+if [[ "$INTEROP_PRESENT" != "True" ]]; then
+  echo "build-release-test: SKIPPED the positive interop-guard case under pwsh and powershell.exe - Autodesk.Inventor.Interop.dll is not installed here, so no add-in built on this machine can carry the interop reference"
+else
+  REAL_RELEASE_DLL="$(dirname "$GUARD_PROJECT")/bin/Release/net10.0-windows/$GUARD_ASSEMBLY"
+  if [[ ! -f "$REAL_RELEASE_DLL" ]]; then
+    REAL_BUILD_OUT="$WORK_ROOT/with-interop-build"
+    echo "build-release-test: $REAL_RELEASE_DLL is missing; building $GUARD_PROJECT in Release with the interop"
+    dotnet build "$GUARD_PROJECT" -c Release --no-restore -o "$(cygpath -w "$REAL_BUILD_OUT")" >/dev/null \
+      || fail "could not build $GUARD_PROJECT in Release for the positive interop-guard case"
+    REAL_RELEASE_DLL="$REAL_BUILD_OUT/$GUARD_ASSEMBLY"
+  fi
+  GOOD_ROOT="$WORK_ROOT/with-interop"
+  GOOD_FIXTURE="$GOOD_ROOT/wmp-tools-manager"
+  GOOD_OUTPUT_DIR="$GOOD_FIXTURE/src/WmpToolsManager.AddIn/bin/Release/net10.0-windows"
+  mkdir -p "$GOOD_FIXTURE/packaging" "$GOOD_OUTPUT_DIR"
+  cp "$GUARD_PLUGIN_DIR/plugin.json" "$GOOD_FIXTURE/plugin.json"
+  cp "$GUARD_PLUGIN_DIR/packaging/Autodesk.WmpToolsManager.Inventor.addin.template" "$GOOD_FIXTURE/packaging/"
+  : > "$GOOD_FIXTURE/src/WmpToolsManager.AddIn/WmpToolsManager.AddIn.csproj"
+  cp "$REAL_RELEASE_DLL" "$GOOD_OUTPUT_DIR/"
+  GOOD_ID="$(sed -n 's/^[[:space:]]*"id":[[:space:]]*"\([^"]*\)".*/\1/p' "$GUARD_PLUGIN_DIR/plugin.json" | head -n1)"
+  [[ -n "$GOOD_ID" ]] || fail "could not read the plugin id from $GUARD_PLUGIN_DIR/plugin.json"
+
+  for shell in pwsh powershell.exe; do
+    if [[ "$shell" == "pwsh" ]]; then method="$METHOD_PWSH"; else method="$METHOD_WINPS"; fi
+    good_dist="$WORK_ROOT/dist-good-$shell"
+    run_case "$GOOD_ROOT" "$shell" "$good_dist"
+    [[ "$CASE_RC" -eq 0 ]] || fail "$shell refused a real interop-built $GUARD_ASSEMBLY: $CASE_OUTPUT"
+    grep -qF "build-release: interop guard OK for $GOOD_ID" <<<"$CASE_OUTPUT" \
+      || fail "$shell did not report the interop guard passing for $GOOD_ID: $CASE_OUTPUT"
+    grep -qF -- "$method" <<<"$CASE_OUTPUT" || fail "$shell did not report '$method' for the passing add-in: $CASE_OUTPUT"
+    [[ -f "$good_dist/WmpInventorTools-$VERSION.zip" ]] || fail "$shell passed the guard but produced no zip"
+    echo "build-release-test: $shell accepted the real interop-built add-in (reported \"$method\") OK"
+  done
+fi
 
 echo "build-release-test: OK"

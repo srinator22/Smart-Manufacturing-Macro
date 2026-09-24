@@ -97,3 +97,26 @@ Entry format (all four fields required):
 - retire-when: the check has been in the gate for 45 days without a
   stale-evidence miss.
 
+- what happened: The v0.6.0 release, the first public one, shipped three add-in
+  DLLs that Inventor lists as Unloaded with no ribbon command. The release
+  workflow built them on a GitHub-hosted runner where Autodesk.Inventor.Interop
+  is absent, so INVENTOR_INTEROP was undefined and every interop-gated block,
+  including StandardAddInServer, compiled out. Every check was green: the gate,
+  the packaging test, the reviewer, the release run, and the advisor's install
+  verification, which asserted manifests and installed.json but never looked
+  inside a DLL. The human found it in Inventor the next day.
+- what check should have caught it: a packaging guard that inspects each
+  add-in assembly for the interop reference and the entry-point type, and a
+  release verification that treats "the DLL exists" as no evidence of "the
+  add-in loads". More generally: any artifact whose content depends on a
+  build-time environment probe (Exists('$(InventorInteropPath)')) needs a
+  check on the artifact, not on the build succeeding.
+- what was added: build-release.ps1 refuses an assembly without the
+  Autodesk.Inventor.Interop reference and the StandardAddInServer type under
+  PowerShell 7 and 5.1; test-build-release.sh has the negative case;
+  release.yml drafts the release without assets; publish-release.ps1 builds
+  and publishes only on a machine with Inventor 2027 at the tag
+  (release-interop-guard task, 2026-09-24).
+- retire-when: the interop can be compiled in CI (a self-hosted runner with
+  Inventor 2027, or an Autodesk-licensed reference package), so the artifact
+  guard is exercised on every push rather than only at publish time.
