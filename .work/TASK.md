@@ -40,5 +40,7 @@ Make it impossible to publish an add-in that does not load. The v0.6.0 release a
 
 Round 1 (2026-09-24T11:20Z, reviewer agent, Opus, read-only): FAIL - 1 blocker (publish-release.ps1 -AllowUntagged let a real publish overwrite live assets from a non-tag commit, and an already-published release was clobbered after only a warning), 4 should-fix (-SkipBuild on a real publish packages unseen gitignored output; no test exercises the publish refusals; the PowerShell 5.1 byte-scan guard branch never runs under the gate; the live v0.6.0 damage had no BACKLOG row after the P0 row was removed), 1 note (the interop-absent branch of test-release.sh first runs in PR CI), 2 nits. The guard itself, release.yml and the stub-based CI path were verified sound.
 
+Round 2 (2026-09-24T12:25Z, same reviewer, rebased tree on c55fee2): PASS - every round 1 finding verified fixed (refusals throw before gh and build; -ReplacePublishedAssets requires HEAD at tag and clean tree and prints the overwrite list with published digests; nine publish cases behind a fake gh shim; both guard readers asserted; BACKLOG P0 row present; docs match code). New: should-fix - the "draft release missing" refusal has no test; nit - the success path (upload, undraft, post-upload checks) is reached only via a build failure. Gate status: no gate evidence yet for this exact tree (Inventor running); PR CI will be the first run of the interop-absent branches.
+
 ## Retro
 <!-- filled by docs/procedures/retro.md -->
