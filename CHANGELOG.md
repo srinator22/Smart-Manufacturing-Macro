@@ -24,6 +24,8 @@ Conventional Commits; the detail lives in commit bodies. Never hand-edited.
 - Open the release-interop-guard task record
 - Record the round 2 review of the interop guard
 - Cover the missing draft release refusal and the publish success path
+- Archive release-interop-guard task
+- State that the guard backlog row was replaced, not removed
 
 ### Fixed
 - Close the review findings on the follow-ups
