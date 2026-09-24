@@ -18,13 +18,13 @@ The WMP Custom Tools ribbon icons look low quality next to Inventor's own: satur
 - Escalate to human when: a live Inventor check contradicts the design, or CI cannot render the masters identically
 
 ## Acceptance criteria
-- [ ] Every ribbon icon has a dark and a light variant at small 16/20/24/32 and large 32/40/48/64 px, rendered from committed XAML masters -> shared/WmpIconRenderer `--check` in scripts/check.sh
-- [ ] Committed PNGs match a fresh render of the masters (generated artifacts are never hand-edited) -> shared/WmpIconRenderer `--check`
-- [ ] Theme name maps to a variant: names containing "Light" map to light, everything else (dark, unknown, empty) to dark -> shared/WmpRibbon.UnitTests/RibbonIconSelectorTests.cs
-- [ ] DPI maps to the smallest supplied size at or above the scaled target, capped at the largest (96 -> 16/32, 120 -> 20/40, 144 -> 24/48, 192 and above -> 32/64, below 96 -> 16/32) -> RibbonIconSelectorTests.cs
-- [ ] Resource names are `<assembly-prefix>.Ribbon.<icon>-<theme>-<size>.png` and each add-in embeds every variant it requests -> RibbonIconSelectorTests.cs and each project's ArchitectureTests
-- [ ] Analyze Naming and Apply Naming use different icons -> FileNamingManager.ArchitectureTests
-- [ ] All three add-ins convert ribbon icons through WmpRibbon.RibbonPicture (PICTYPE_ICON); the per-project AxHost converters are no longer used -> judgment: grep in review, plus live check
+- [x] Every ribbon icon has a dark and a light variant at small 16/20/24/32 and large 32/40/48/64 px, rendered from committed XAML masters -> shared/WmpIconRenderer `--check` in scripts/check.sh
+- [x] Committed PNGs match a fresh render of the masters (generated artifacts are never hand-edited) -> shared/WmpIconRenderer `--check`
+- [x] Theme name maps to a variant: names containing "Light" map to light, everything else (dark, unknown, empty) to dark -> shared/WmpRibbon.UnitTests/RibbonIconSelectorTests.cs
+- [x] DPI maps to the smallest supplied size at or above the scaled target, capped at the largest (96 -> 16/32, 120 -> 20/40, 144 -> 24/48, 192 and above -> 32/64, below 96 -> 16/32) -> RibbonIconSelectorTests.cs
+- [x] Resource names are `<assembly-prefix>.Ribbon.<icon>-<theme>-<size>.png` and each add-in embeds every variant it requests -> RibbonIconSelectorTests.cs and each project's ArchitectureTests
+- [x] Analyze Naming and Apply Naming use different icons -> FileNamingManager.ArchitectureTests
+- [x] All three add-ins convert ribbon icons through WmpRibbon.RibbonPicture (PICTYPE_ICON); the per-project AxHost converters are no longer used -> judgment: grep in review, plus live check
 - [x] Live: on Inventor 2027 dark theme at 125% the four icons render in the new style without dark fringes -> judgment: user screenshot 2026-09-23 (before the resize; enlarged icons not re-screenshotted)
 - [ ] ./scripts/check.sh green in CI for the pushed SHA
 
@@ -45,7 +45,12 @@ The WMP Custom Tools ribbon icons look low quality next to Inventor's own: satur
 - 2026-09-23 docs: docs/rules/ribbon-icons.md (agent guide for new tools and icons), linked from the AGENTS.md rules index; WmpRibbon and WmpIconRenderer READMEs; BACKLOG rows for the release packaging guard (P0), archiving superseded icon sources, and live theme refresh.
 - 2026-09-23 live (dark theme, 125%): user screenshot showed all four commands loaded with the new icons, no dark fringes; user judged them "a little small". Measured content spans 20.5 to 25 of 32 units against Inventor's near-full-square icons.
 - 2026-09-23 resize: all eight masters redrawn to span 27 to 30.5 of 32 (14 to 16 of 16); WmpIconRenderer now rejects a master whose longer side is under 28/32 or shorter side under 26/32 (verified: the previous smart-export master fails, all new masters pass). Enlarged build installed; the user asked to commit without a second screenshot, so the enlarged icons are not yet re-checked live.
+- 2026-09-24 gate: check.sh locally green through the three projects' packaging; it stops at test-check-live-evidence.sh because the only local PowerShell is 5.1 (ConvertFrom-Json -NoEnumerate is PowerShell 7 only). Remaining steps run individually: SME and WMP project checks OK, icons --check OK, test-build-release.sh OK, test-release.sh fails only because PowerShell 5.1 Compress-Archive writes backslash zip entries (confirmed with unzip -l), gitleaks git and dir no leaks, Release build 0 warnings. Mutation not run locally. CI (pwsh 7) is the authority for those steps.
+- 2026-09-24 review: FAIL on stale asset READMEs, plus two non-blocking weaknesses; fixed in a50184a (READMEs, null-safe ReadThemeName, AnalyzeAndApplyButtonsAreWiredToDistinctIcons verified to fail on miswiring); delta review PASS. 743 tests pass.
 
 ## Review verdict
+Reviewer (fresh context), first pass: FAIL - AGENTS.md Standards (README present-tense): the three projects' assets/README.md still called <name>-16.png/-32.png the live ribbon and window icons. Non-blocking: the distinct-icons assertion only checked names; ReadThemeName would throw on a null theme.
+
+Reviewer, delta pass on a50184a: PASS - the asset READMEs are present-tense and match the csproj and XAML wiring; ReadThemeName falls back to dark on null; the new test pins each button's icon pair and that the analyze and apply PNGs differ, and its regexes cannot match across calls; BACKLOG's "nothing references them" holds. Pending: CI green for the pushed SHA.
 
 ## Retro
