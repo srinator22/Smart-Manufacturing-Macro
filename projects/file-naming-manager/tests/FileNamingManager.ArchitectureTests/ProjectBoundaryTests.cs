@@ -233,6 +233,29 @@ public sealed class ProjectBoundaryTests
     }
 
     [Fact]
+    public void AnalyzeAndApplyButtonsAreWiredToDistinctIcons()
+    {
+        string projectRoot = FindProjectRoot();
+        string server = File.ReadAllText(Path.Combine(projectRoot, "src", "FileNamingManager.AddIn", "StandardAddInServer.cs"));
+
+        Assert.Matches(new Regex(@"\(analyzeStandardIcon, analyzeLargeIcon\) = RibbonIcons\.Load\([^;]*""analyze-naming""\);"), server);
+        Assert.Matches(new Regex(@"\(applyStandardIcon, applyLargeIcon\) = RibbonIcons\.Load\([^;]*""apply-naming""\);"), server);
+        Assert.Matches(new Regex(@"""Analyze Naming"",[^;]*analyzeStandardIcon,\s*analyzeLargeIcon\);"), server);
+        Assert.Matches(new Regex(@"""Apply Naming"",[^;]*applyStandardIcon,\s*applyLargeIcon\);"), server);
+
+        string ribbonRoot = Path.Combine(projectRoot, "assets", "ribbon");
+        foreach (string theme in new[] { "dark", "light" })
+        {
+            foreach (int size in new[] { 16, 20, 24, 32, 40, 48, 64 })
+            {
+                byte[] analyze = File.ReadAllBytes(Path.Combine(ribbonRoot, $"analyze-naming-{theme}-{size}.png"));
+                byte[] apply = File.ReadAllBytes(Path.Combine(ribbonRoot, $"apply-naming-{theme}-{size}.png"));
+                Assert.False(analyze.AsSpan().SequenceEqual(apply), $"analyze-naming and apply-naming render identically at {theme} {size} px.");
+            }
+        }
+    }
+
+    [Fact]
     public void LiveEvidenceStampCarriesNoLocalPaths()
     {
         // The stamp is the only committed product of a live Inventor run. It is written on a

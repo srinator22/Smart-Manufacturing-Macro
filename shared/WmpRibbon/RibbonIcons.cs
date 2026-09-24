@@ -59,7 +59,9 @@ public static class RibbonIcons
     {
         try
         {
-            return application.ThemeManager.ActiveTheme.Name;
+            // The interop documents no null contract for either property, so a null is treated like
+            // a failed query rather than allowed to throw out of Activate.
+            return application.ThemeManager?.ActiveTheme?.Name;
         }
         catch (COMException)
         {
